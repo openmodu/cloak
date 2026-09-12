@@ -34,13 +34,16 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 	p := s.proxy
 	if req.APIKeyFile != "" {
 		if s.proxyFactory == nil {
-			writeError(w, http.StatusBadRequest, "request apiKeyFile is not supported")
+			writeError(w, http.StatusBadRequest, "请求级 apiKeyFile 未启用：服务端需配置 --api-key-dir")
 			return
 		}
 		var err error
 		p, err = s.proxyFactory(req.APIKeyFile)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			// 不回显底层错误：区分「文件不存在」「解析失败」「路径越界」会把
+			// 服务端的文件系统结构透露给调用方。
+			s.log.Warn("请求级 apiKeyFile 被拒绝", "err", err)
+			writeError(w, http.StatusBadRequest, "apiKeyFile 不可用")
 			return
 		}
 	}

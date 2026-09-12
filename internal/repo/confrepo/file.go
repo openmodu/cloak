@@ -18,6 +18,7 @@ type FileConfig struct {
 	ENModelID   string           `yaml:"en_model_id"`
 	ZHModelID   string           `yaml:"zh_model_id"`
 	HTTPAPIKey  string           `yaml:"http_api_key"`
+	APIKeyDir   string           `yaml:"api_key_dir"`
 	LogLevel    string           `yaml:"log_level"`
 	Temperature float32          `yaml:"temperature"`
 	MaskConfig  map[string]*bool `yaml:"mask_config"`

@@ -65,7 +65,7 @@ curl -s localhost:8844/api/health
 注意它里面含有原文，要和脱敏前的文本同等看待——不要写进日志，不要转给第三方。
 
 HTTP 和 CLI JSON 输出使用小端二进制凭据格式，只序列化命中的文本片段；
-还原同时接受此格式与 cloak 旧版的 base64(JSON) 格式。详见 [兼容说明](docs/compatibility.md)。
+还原同时接受此格式与旧版的 base64(JSON) 格式。详见 [行为约定](docs/behavior.md)。
 
 ## 工程约定
 
@@ -342,18 +342,18 @@ my pwd: hunter2        →  __PII_PASSWORD_1__   规则分数 0.6
 正则只能认有固定形状的东西。人名、机构名要靠模型；中文地址融合也需要 NER
 先给出种子区间，没有 NER 时那套规则一次都不会触发。见「启用 NER」。
 
-### 4. 语言判定是启发式的
+### 4. 语言判定是基于字符分布的
 
-按 CJK 字符占比判断中英文，不是概率语言模型。这个判定决定了走不走中文地址融合、
-选哪个 NER 模型，在中英混排和短文本上可能判错。明确知道语言时，HTTP 传
-`language` 字段、CLI 用 `--language` 直接指定，能绕开判定。
+先看假名与谚文这类排他性字符定出日文、韩文，再按汉字占比区分中英文，简繁则靠
+繁体专用字命中判断。它不是概率语言模型，在中英混排、极短文本上可能判错。
+明确知道语言时，HTTP 传 `language` 字段、CLI 用 `--language` 直接指定，能绕开判定。
 
 ### 5. 分词器只覆盖 BERT WordPiece
 
-`pkg/tokenize` 是固定的 BasicTokenizer + WordPiece，只读 `tokenizer_config.json`
-里的 `do_lower_case` 与 `strip_accents`，不执行 `tokenizer.json` 中配置的
-normalizer / pre_tokenizer 流水线。标准 BERT 系模型没问题，换成 BPE 系或带特殊
-归一化配置的模型会对不上。
+`pkg/tokenize` 是固定的 BasicTokenizer + WordPiece。模型若带 `tokenizer.json`，
+其中的 `model.type`、`normalizer`、`pre_tokenizer` 会被校验，**超出实现范围时直接
+报错**（随后按「模型不可用」退化成纯正则），不会静默产出错位的 token。
+BPE 系模型、ByteLevel/Metaspace 预分词、Precompiled 归一化都不支持。
 
 ### 6. 超长文本的尾部不过 NER
 

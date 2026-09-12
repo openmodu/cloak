@@ -6,10 +6,12 @@ import "strings"
 type Language string
 
 const (
-	LangUnknown Language = ""
-	LangEnglish Language = "en"
-	LangZhHans  Language = "zh-Hans"
-	LangZhHant  Language = "zh-Hant"
+	LangUnknown  Language = ""
+	LangEnglish  Language = "en"
+	LangZhHans   Language = "zh-Hans"
+	LangZhHant   Language = "zh-Hant"
+	LangJapanese Language = "ja"
+	LangKorean   Language = "ko"
 )
 
 // IsChinese 判断是否属于中文语系，中文地址融合等规则依赖它。

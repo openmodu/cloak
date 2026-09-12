@@ -48,6 +48,11 @@ func Load(modelDir string) (*Tokenizer, error) {
 	if err != nil {
 		return nil, err
 	}
+	// tokenizer.json 里可能声明了本包没实现的流水线；宁可在这里失败，
+	// 也不要让分词悄悄算错。
+	if err := inspectTokenizerJSON(modelDir, &cfg); err != nil {
+		return nil, err
+	}
 	return New(vocab, cfg), nil
 }
 

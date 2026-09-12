@@ -39,7 +39,12 @@ type Config struct {
 	// /api/call 会明确回 503，而脱敏/还原接口照常可用。
 	APIKeyFile string
 	// HTTPAPIKey 非空时启用 Authorization 校验。
-	HTTPAPIKey  string
+	HTTPAPIKey string
+	// APIKeyDir 启用「请求级 apiKeyFile」并把它限制在这个目录之内。
+	//
+	// 留空则该功能关闭。这是安全默认值：开启后请求能指定服务端去读哪个文件，
+	// 不加限制就等于把任意本地文件读取的能力交给了调用方。
+	APIKeyDir   string
 	MaskConfig  map[string]*bool
 	Temperature float32
 }

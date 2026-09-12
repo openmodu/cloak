@@ -3,8 +3,11 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,6 +18,7 @@ import (
 	"github.com/openmodu/cloak/internal/usecase/masker"
 	"github.com/openmodu/cloak/internal/usecase/proxy"
 	"github.com/openmodu/cloak/internal/usecase/restorer"
+	"github.com/openmodu/cloak/pkg/pathsafe"
 )
 
 func newTestServer(t *testing.T, opts ...Option) (*Server, http.Handler) {
@@ -238,4 +242,70 @@ func TestRestoreWithBadMeta(t *testing.T) {
 func jsonString(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// 请求级 apiKeyFile 默认关闭：不配置目录时，任何指定路径的请求都要被拒。
+// 否则等于把「读服务端任意本地文件」的能力交给了调用方。
+func TestRequestAPIKeyFileDisabledByDefault(t *testing.T) {
+	_, h := newTestServer(t)
+	code, body := do(t, h, "POST", "/api/call",
+		`{"text":"hi","apiKeyFile":"/etc/passwd"}`, nil)
+	if code != 400 {
+		t.Fatalf("want 400, got %d %v", code, body)
+	}
+}
+
+// 启用之后也只接受目录内的相对路径，且错误信息不能透露文件系统细节。
+func TestRequestAPIKeyFileIsSandboxed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "good.json"), []byte(
+		`{"openai-api-key":"k","openai-base-url":"http://127.0.0.1:1/v1","openai-model":"m"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var gotPath string
+	_, h := newTestServer(t, WithProxyFactory(func(p string) (*proxy.Proxy, error) {
+		resolved, err := pathsafe.Within(dir, p)
+		if err != nil {
+			return nil, err
+		}
+		gotPath = resolved
+		return nil, errors.New("stop here: 本测试只验证路径解析")
+	}))
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"绝对路径", "/etc/passwd"},
+		{"父目录逃逸", "../../etc/passwd"},
+		{"目录外", "../other.json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, body := do(t, h, "POST", "/api/call",
+				`{"text":"hi","apiKeyFile":`+jsonString(tc.path)+`}`, nil)
+			if code != 400 {
+				t.Fatalf("want 400, got %d", code)
+			}
+			if msg, _ := body["error"].(map[string]any)["message"].(string); strings.Contains(msg, "/etc") ||
+				strings.Contains(msg, dir) {
+				t.Fatalf("错误信息泄漏了路径: %q", msg)
+			}
+		})
+	}
+
+	// 目录内的相对路径应当被解析到该目录下
+	do(t, h, "POST", "/api/call", `{"text":"hi","apiKeyFile":"good.json"}`, nil)
+	if gotPath != filepath.Join(mustEval(t, dir), "good.json") {
+		t.Fatalf("解析结果不对: %q", gotPath)
+	}
+}
+
+func mustEval(t *testing.T, p string) string {
+	t.Helper()
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return real
 }

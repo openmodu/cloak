@@ -18,6 +18,10 @@ func (d *Detector) Detect(text string) types.Language {
 		return types.LangZhHans
 	case textutil.ScriptHant:
 		return types.LangZhHant
+	case textutil.ScriptJapanese:
+		return types.LangJapanese
+	case textutil.ScriptKorean:
+		return types.LangKorean
 	case textutil.ScriptLatin:
 		return types.LangEnglish
 	default:

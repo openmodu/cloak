@@ -33,6 +33,7 @@ func run() error {
 		enModelID   = flag.String("en-model", "", "英文 NER 模型在模型根目录下的相对路径")
 		zhModelID   = flag.String("zh-model", "", "中文 NER 模型在模型根目录下的相对路径")
 		httpAPIKey  = flag.String("http-api-key", "", "本服务的访问口令；不给则不校验 Authorization")
+		apiKeyDir   = flag.String("api-key-dir", "", "允许请求用 apiKeyFile 指定的目录；不给则该功能关闭")
 		temperature = flag.String("temperature", "", "默认 LLM 温度")
 		logLevel    = flag.String("log-level", "", "日志级别")
 	)
@@ -58,6 +59,7 @@ func run() error {
 		ZHModelID:   confrepo.Resolve(*zhModelID, confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
 		APIKeyFile:  confrepo.ResolvePath(*apiKeyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""),
 		HTTPAPIKey:  confrepo.Resolve(*httpAPIKey, confrepo.EnvNames("HTTP_API_KEY"), fileCfg.HTTPAPIKey, ""),
+		APIKeyDir:   confrepo.ResolvePath(*apiKeyDir, confrepo.EnvNames("API_KEY_DIR"), fileCfg.APIKeyDir, ""),
 		MaskConfig:  fileCfg.MaskConfig,
 		Temperature: resolvedTemperature,
 	}

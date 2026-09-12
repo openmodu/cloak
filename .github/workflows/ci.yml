@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: 格式检查
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "以下文件未格式化，请运行 make fmt：" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # NER 那条路挂在编译标签后面，默认构建覆盖不到，必须单独 vet
+      - name: go vet（带 ONNX）
+        run: CGO_ENABLED=1 go vet -tags cloak_onnx ./...
+
+      - name: 单元测试
+        run: go test ./...
+
+      - name: 竞态检测
+        run: go test -race ./...
+
+      - name: 构建
+        run: |
+          go build ./...
+          CGO_ENABLED=1 go build -tags cloak_onnx ./...
+
+      # 注入代码是生成物，必须和 ProviderSet 保持同步
+      - name: wire 生成结果是最新的
+        run: |
+          go install github.com/google/wire/cmd/wire@v0.7.0
+          "$(go env GOPATH)/bin/wire" ./internal/bootstrap/
+          if ! git diff --quiet -- internal/bootstrap/wire_gen.go; then
+            echo "wire_gen.go 与 ProviderSet 不同步，请运行 make wire 后提交" >&2
+            git diff -- internal/bootstrap/wire_gen.go >&2
+            exit 1
+          fi

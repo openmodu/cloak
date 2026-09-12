@@ -19,6 +19,7 @@ import (
 	"github.com/openmodu/cloak/internal/usecase/proxy"
 	"github.com/openmodu/cloak/internal/usecase/restorer"
 	"github.com/openmodu/cloak/pkg/onnxrt"
+	"github.com/openmodu/cloak/pkg/pathsafe"
 )
 
 // RepoSet 汇集 repo 层实现，并把它们绑定到 usecase 声明的接口上。
@@ -175,12 +176,28 @@ func ProvideHTTPServer(app *App, p *proxy.Proxy, cfg Config) *httptransport.Serv
 		httptransport.WithProxy(p),
 		httptransport.WithAPIKey(cfg.HTTPAPIKey),
 		httptransport.WithTemperature(cfg.Temperature),
-		httptransport.WithProxyFactory(func(path string) (*proxy.Proxy, error) {
-			client, err := llmrepo.NewFromFile(path)
-			if err != nil {
-				return nil, err
-			}
-			return proxy.New(app.Masker, app.Restorer, client), nil
-		}),
+		httptransport.WithProxyFactory(requestAPIKeyFactory(app, cfg.APIKeyDir)),
 	)
+}
+
+// requestAPIKeyFactory 构造「请求级 apiKeyFile」的处理函数。
+//
+// 没配置 APIKeyDir 就返回 nil，HTTP 层据此拒掉这类请求——默认关闭，
+// 需要显式打开。打开之后请求里的路径只能是相对 APIKeyDir 的相对路径，
+// 绝对路径、`..` 逃逸、指向目录外的符号链接一律拒绝。
+func requestAPIKeyFactory(app *App, dir string) func(string) (*proxy.Proxy, error) {
+	if dir == "" {
+		return nil
+	}
+	return func(path string) (*proxy.Proxy, error) {
+		resolved, err := pathsafe.Within(dir, path)
+		if err != nil {
+			return nil, err
+		}
+		client, err := llmrepo.NewFromFile(resolved)
+		if err != nil {
+			return nil, err
+		}
+		return proxy.New(app.Masker, app.Restorer, client), nil
+	}
 }
