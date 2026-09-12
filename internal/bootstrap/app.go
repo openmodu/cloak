@@ -30,6 +30,11 @@ type Config struct {
 	// ModelsDir 是 NER 模型根目录。留空、目录不存在、或二进制没带 ONNX 支持时，
 	// 识别退化成「只有正则」，服务照常可用。
 	ModelsDir string
+	// ENModelID / ZHModelID 是两个 NER 模型在 ModelsDir 下的相对路径。
+	// 留空则用 DefaultENModelID / DefaultZHModelID。
+	// 做成可配置是因为模型仓库会改名、下架，或者使用者本来就想换成自己微调的模型。
+	ENModelID string
+	ZHModelID string
 	// APIKeyFile 是 LLM 的 API key 文件路径。留空则不接入大模型，
 	// /api/call 会明确回 503，而脱敏/还原接口照常可用。
 	APIKeyFile string

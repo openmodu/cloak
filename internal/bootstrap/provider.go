@@ -65,12 +65,31 @@ func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) [
 }
 
 // 中英文各挂一个模型，按语言分流。模型 id 同时也是它在模型根目录下的相对路径。
-var nerModels = []struct {
+// 默认模型。标签集须是 PER / ORG / LOC 这一套，否则 labelToEntityType 认不出来。
+const (
+	DefaultENModelID = "Xenova/bert-base-NER"
+	DefaultZHModelID = "Xenova/bert-base-multilingual-cased-ner-hrl"
+)
+
+// nerModelsFor 决定启用哪些模型、各自负责哪种语言。
+func nerModelsFor(cfg Config) []struct {
 	id      string
 	forLang func(types.Language) bool
-}{
-	{"funstory-ai/neurobert-mini", func(l types.Language) bool { return !l.IsChinese() }},
-	{"ckiplab/bert-tiny-chinese-ner", func(l types.Language) bool { return l.IsChinese() }},
+} {
+	en, zh := cfg.ENModelID, cfg.ZHModelID
+	if en == "" {
+		en = DefaultENModelID
+	}
+	if zh == "" {
+		zh = DefaultZHModelID
+	}
+	return []struct {
+		id      string
+		forLang func(types.Language) bool
+	}{
+		{en, func(l types.Language) bool { return !l.IsChinese() }},
+		{zh, func(l types.Language) bool { return l.IsChinese() }},
+	}
 }
 
 // ProvideNERRecognizers 按约定的目录布局加载模型：
@@ -83,7 +102,7 @@ func ProvideNERRecognizers(cfg Config) ([]*nerrepo.Recognizer, error) {
 		return nil, nil
 	}
 	var out []*nerrepo.Recognizer
-	for _, m := range nerModels {
+	for _, m := range nerModelsFor(cfg) {
 		dir := filepath.Join(cfg.ModelsDir, filepath.FromSlash(m.id))
 		modelPath := filepath.Join(dir, "onnx", "model_quantized.onnx")
 		if _, err := os.Stat(modelPath); err != nil {

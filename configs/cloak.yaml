@@ -16,6 +16,16 @@ port: 8844
 # 本服务自身的访问口令。留空则不校验 Authorization 头。
 # http_api_key: change-me
 
+# 本地 NER。需要带 ONNX 支持编译的二进制（-tags cloak_onnx），
+# 模型与动态库用 scripts/setup-ner.sh 一键准备。
+# 不配则只用正则识别，人名、机构名、中文地址不会被脱敏。
+# models_dir: ~/.cloak/models
+#
+# 两个模型在 models_dir 下的相对路径，留空用默认值。
+# 标签集须是 PER / ORG / LOC 这一套。
+# en_model_id: Xenova/bert-base-NER
+# zh_model_id: Xenova/bert-base-multilingual-cased-ner-hrl
+
 log_level: "INFO"
 temperature: 0.0
 

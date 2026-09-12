@@ -15,6 +15,8 @@ type FileConfig struct {
 	Port        int              `yaml:"port"`
 	APIKeyFile  string           `yaml:"api_key_file"`
 	ModelsDir   string           `yaml:"models_dir"`
+	ENModelID   string           `yaml:"en_model_id"`
+	ZHModelID   string           `yaml:"zh_model_id"`
 	HTTPAPIKey  string           `yaml:"http_api_key"`
 	LogLevel    string           `yaml:"log_level"`
 	Temperature float32          `yaml:"temperature"`
@@ -54,6 +56,14 @@ func Resolve(flagVal string, envNames []string, fileVal string, def string) stri
 	return def
 }
 
+// ResolvePath 与 Resolve 相同，但会把开头的 ~ 展开成用户主目录。
+//
+// 配置文件里写 ~/.cloak/models 是很自然的事，但这个值最终会拼成文件路径去
+// os.Stat——不展开的话只会得到一句「文件不存在」，让人以为是模型没装好。
+func ResolvePath(flagVal string, envNames []string, fileVal string, def string) string {
+	return expandHome(Resolve(flagVal, envNames, fileVal, def))
+}
+
 // ResolveInt 是 Resolve 的整数版本，0 视为未设置。
 func ResolveInt(flagVal int, envNames []string, fileVal int, def int) int {
 	if flagVal != 0 {
@@ -77,7 +87,13 @@ func EnvNames(suffix string) []string {
 	return []string{"CLOAK_" + suffix}
 }
 
+// expandHome 展开开头的 ~，其余原样返回。
 func expandHome(path string) string {
+	if path == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			return home
+		}
+	}
 	if strings.HasPrefix(path, "~/") {
 		if home, err := os.UserHomeDir(); err == nil {
 			return filepath.Join(home, path[2:])

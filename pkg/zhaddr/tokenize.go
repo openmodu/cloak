@@ -67,6 +67,13 @@ func adjustAdminRoadChunkStart(text string, level AddrLevel, s0, suffixPos int) 
 //
 // 识别顺序即优先级，先粗后细；命中后把游标推到该 token 末尾继续扫。
 func tokenizeWindow(text string, start, end, newEnd int) (uint32, []token, int) {
+	bits, tokens, outEnd := scanTokens(text, start, end, newEnd)
+	tokens, bits = dropTokensFinerThanLast(tokens, bits)
+	return bits, tokens, outEnd
+}
+
+// scanTokens 只做切分，不做层级规整，返回窗口里**出现过**的全部成分。
+func scanTokens(text string, start, end, newEnd int) (uint32, []token, int) {
 	var bits uint32
 	var tokens []token
 	if end <= start || end > len(text) {
@@ -285,7 +292,6 @@ func tokenizeWindow(text string, start, end, newEnd int) (uint32, []token, int) 
 		i++
 	}
 
-	tokens, bits = dropTokensFinerThanLast(tokens, bits)
 	return bits, tokens, newEnd
 }
 

@@ -13,6 +13,8 @@
 | 凭据 | HTTP/CLI JSON 输出小端 aifw ABI；读取同时兼容旧 cloak JSON |
 | Unicode 正则 | 内置规则的数字、空白及词边界使用 Unicode 集合；自定义规则中的复杂嵌套/否定类不保证 Rust 全语法兼容 |
 | NER 分词 | 共享转换器串行保护，已有并发回归；真实模型尚需验证 |
+| NER 序列长度 | 取模型 `config.json` 的 `max_position_embeddings`，读不到退回 512 |
+| 地址融合兜底 | 融合产不出结果时保留 NER 原始地址区间；仅当该段本身够不到隐私阈值才丢弃 |
 | 简繁转换 | 安装 OpenCC 后中文 NER 自动接入；繁体输入不转换，简体输入 s2t，token 批量 t2s |
 
 ## CLI
@@ -41,6 +43,21 @@ CLOAK_TEST_MODELS_DIR=/path/to/models \
 CLOAK_ONNXRUNTIME_LIB=/path/to/libonnxruntime.so make test-onnx
 ```
 
-此命令不能替代同模型、同语料的 aifw/cloak 差分测试。当前未完成真实 NER 差分和
-当前版本 Zig 中文地址对拍。浏览器扩展、WASM、JS/Python SDK、网页、模型下载打包、
+默认模型是 `Xenova/bert-base-NER`（英文）与
+`Xenova/bert-base-multilingual-cased-ner-hrl`（中文），可用 `--en-model` /
+`--zh-model`、`CLOAK_EN_MODEL_ID` / `CLOAK_ZH_MODEL_ID` 或 YAML 覆盖。
+标签集须是 PER / ORG / LOC 这一套。
+
+已跑通的真实模型验证（ONNX Runtime 1.30.0，CPU）：
+
+| 样本 | 结果 |
+|---|---|
+| `John Smith works at Microsoft in New York.` | 人名 / 机构 / 地名三项全中，分数 >0.99 |
+| `王小明住在北京市朝阳区建国路88号。` | 人名与地址均命中，偏移落在字符边界上 |
+| `公司在苏州工业园区星海街星海广场2栋18层1802室办公。` | NER 只给出「苏州」与「星海街星海广场」两段碎片，地址融合补全为完整地址 |
+| `请把合同寄到深圳市南山区科技南十二路8-2号科兴科学园C座5层。` | 融合产不出结果（门牌号被层级倒挂清理删掉），回退到 NER 边界脱敏 |
+| `我在上海市浦东新区上班，离家很近。` | 只到区县，够不到隐私阈值，按设计不脱敏 |
+
+此命令不能替代同模型、同语料的差分测试。中文地址融合的逐行对拍在当前代码上仍然成立
+（`pkg/zhaddr` 自对拍通过后未再改动）。浏览器扩展、WASM、JS/Python SDK、网页、模型下载打包、
 CLI 后台进程管理与远程 HTTP 客户端均不在本次服务端补齐范围内。

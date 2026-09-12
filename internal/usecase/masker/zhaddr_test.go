@@ -118,3 +118,61 @@ func TestOrganizationCoveredByAddressIsDropped(t *testing.T) {
 		t.Fatalf("融合结果应当覆盖整段地址: %+v", items)
 	}
 }
+
+// 回归用例：真实模型上发现的漏检。
+//
+// NER 认出了「深圳市南山区科技南十二路8-2号科兴科学园」，但这个种子正好止于园区名
+// （L7）。地址融合在规整 token 时把排在它前面、层级更细的门牌号（L5）当成倒挂删掉，
+// 于是层级链够不到隐私阈值，一条地址都产不出来。
+// 若此时还无条件丢弃原始区间，整条地址就会原样漏出去。
+func TestAddressKeptWhenMergeYieldsNothing(t *testing.T) {
+	const text = "请把合同寄到深圳市南山区科技南十二路8-2号科兴科学园C座5层。"
+	const seed = "深圳市南山区科技南十二路8-2号科兴科学园"
+
+	start := strings.Index(text, seed)
+	m := New(
+		WithRecognizers(stubRecognizer{name: "ner", spans: []types.Span{
+			{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99},
+		}}),
+		WithLangDetector(zhDetector{}),
+		WithConfigStore(&stubConf{cfg: types.EnableAllMaskConfig()}),
+	)
+
+	items, err := m.Spans(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("地址不能被丢掉，实际得到 %d 个区间: %+v", len(items), items)
+	}
+	if got := text[items[0].Start:items[0].End]; got != seed {
+		t.Fatalf("应当保留 NER 的原始边界\n got %q\nwant %q", got, seed)
+	}
+}
+
+// 融合成功时原始种子要让位，不能两份都留下。
+func TestOriginalAddressDroppedWhenMergeSucceeds(t *testing.T) {
+	const text = "我家住北京市朝阳区建国路88号国贸中心A座1208室。"
+	const seed = "北京市朝阳区"
+
+	start := strings.Index(text, seed)
+	m := New(
+		WithRecognizers(stubRecognizer{name: "ner", spans: []types.Span{
+			// 分数刻意高于融合结果，验证靠的是「让位」而不是事后按分数二选一
+			{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.9999},
+		}}),
+		WithLangDetector(zhDetector{}),
+		WithConfigStore(&stubConf{cfg: types.EnableAllMaskConfig()}),
+	)
+
+	items, err := m.Spans(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %+v", items)
+	}
+	if got := text[items[0].Start:items[0].End]; got != "北京市朝阳区建国路88号国贸中心A座1208室" {
+		t.Fatalf("应当是融合后的完整地址，实际 %q", got)
+	}
+}

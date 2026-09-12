@@ -137,3 +137,39 @@ func TestOtherSeedsIgnored(t *testing.T) {
 		t.Fatalf("got %+v", res)
 	}
 }
+
+// ContainsPrivateDetail 只看出现过什么成分，不受拼接顺序影响。
+func TestContainsPrivateDetail(t *testing.T) {
+	cases := []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"有门牌号", "北京市朝阳区建国路88号", true},
+		{"POI 加楼层", "成都市高新区环球中心5楼", true},
+		{"只到区县", "上海市浦东新区", false},
+		{"只到国家地区", "香港特別行政區", false},
+		{"只到道路", "北京市朝阳区建国路", false},
+		// 关键一条：园区名排在门牌号之后，拼接时会被判层级倒挂删掉，
+		// 但这段文字本身确实含门牌号，必须判为敏感。
+		{"门牌号后跟园区名", "深圳市南山区科技南十二路8-2号科兴科学园", true},
+		{"空串", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ContainsPrivateDetail(c.text, 0, len(c.text)); got != c.want {
+				t.Fatalf("got %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// 越界区间不能 panic。
+func TestContainsPrivateDetailBadRange(t *testing.T) {
+	text := "北京市朝阳区建国路88号"
+	for _, c := range [][2]int{{-1, 5}, {0, len(text) + 10}, {5, 5}, {8, 3}} {
+		if ContainsPrivateDetail(text, c[0], c[1]) {
+			t.Fatalf("越界区间 %v 应当返回 false", c)
+		}
+	}
+}

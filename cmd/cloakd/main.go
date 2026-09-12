@@ -30,6 +30,8 @@ func run() error {
 		host        = flag.String("host", "", "监听地址，默认 127.0.0.1")
 		apiKeyFile  = flag.String("api-key-file", "", "LLM API key 文件路径；不给则不接入大模型")
 		modelsDir   = flag.String("models-dir", "", "NER 模型根目录；不给则只用正则识别")
+		enModelID   = flag.String("en-model", "", "英文 NER 模型在模型根目录下的相对路径")
+		zhModelID   = flag.String("zh-model", "", "中文 NER 模型在模型根目录下的相对路径")
 		httpAPIKey  = flag.String("http-api-key", "", "本服务的访问口令；不给则不校验 Authorization")
 		temperature = flag.String("temperature", "", "默认 LLM 温度")
 		logLevel    = flag.String("log-level", "", "日志级别")
@@ -51,8 +53,10 @@ func run() error {
 		confrepo.ResolveInt(*port, confrepo.EnvNames("PORT"), fileCfg.Port, defaultPort),
 	)
 	cfg := bootstrap.Config{
-		ModelsDir:   confrepo.Resolve(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
-		APIKeyFile:  confrepo.Resolve(*apiKeyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""),
+		ModelsDir:   confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		ENModelID:   confrepo.Resolve(*enModelID, confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
+		ZHModelID:   confrepo.Resolve(*zhModelID, confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
+		APIKeyFile:  confrepo.ResolvePath(*apiKeyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""),
 		HTTPAPIKey:  confrepo.Resolve(*httpAPIKey, confrepo.EnvNames("HTTP_API_KEY"), fileCfg.HTTPAPIKey, ""),
 		MaskConfig:  fileCfg.MaskConfig,
 		Temperature: resolvedTemperature,

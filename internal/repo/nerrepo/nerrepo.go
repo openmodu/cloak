@@ -40,8 +40,9 @@ type TextConverter interface {
 	ToSource(context.Context, []string) ([]string, error)
 }
 
-// MaxSeqLen 是截断长度，与常见 BERT 系模型的位置编码上限一致。
-const MaxSeqLen = 512
+// DefaultMaxSeqLen 是读不到模型配置时的兜底截断长度。
+// 模型自报的位置编码上限优先，见 ModelConfig.MaxSeqLen。
+const DefaultMaxSeqLen = 512
 
 type Recognizer struct {
 	name      string
@@ -51,9 +52,21 @@ type Recognizer struct {
 	converter TextConverter
 	ignore    map[string]bool
 	forLang   func(types.Language) bool
+	// maxSeqLen 是送进模型的 token 上限（含 [CLS]/[SEP]）。
+	// 超出模型位置编码上限会让推理直接失败或产出垃圾，所以必须按模型配置来截断。
+	maxSeqLen int
 }
 
 type Option func(*Recognizer)
+
+// WithMaxSeqLen 覆盖截断长度。传入非正值则保持原值。
+func WithMaxSeqLen(n int) Option {
+	return func(r *Recognizer) {
+		if n > 0 {
+			r.maxSeqLen = n
+		}
+	}
+}
 
 // WithConverter 接入简繁转换。
 func WithConverter(c TextConverter) Option {
@@ -84,6 +97,7 @@ func New(name string, tk *tokenize.Tokenizer, inf Inferencer, id2label map[int]s
 		inf:       inf,
 		id2label:  id2label,
 		ignore:    map[string]bool{"O": true},
+		maxSeqLen: DefaultMaxSeqLen,
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -94,7 +108,7 @@ func New(name string, tk *tokenize.Tokenizer, inf Inferencer, id2label map[int]s
 // LoadFromDir 按约定的目录布局加载模型：
 //
 //	<modelDir>/vocab.txt 或 tokenizer.json
-//	<modelDir>/config.json          （提供 id2label）
+//	<modelDir>/config.json          （提供 id2label 与 max_position_embeddings）
 //	<modelDir>/onnx/model_quantized.onnx
 //
 // 推理器由调用方传入，因为它的实现取决于编译时是否带上 ONNX Runtime。
@@ -106,38 +120,58 @@ func LoadFromDir(name, modelDir string, inf Inferencer, opts ...Option) (*Recogn
 	if err != nil {
 		return nil, fmt.Errorf("%w: 加载分词器失败: %v", ErrModelUnavailable, err)
 	}
-	id2label, err := LoadID2Label(modelDir)
+	cfg, err := LoadModelConfig(modelDir)
 	if err != nil {
 		return nil, err
 	}
-	return New(name, tk, inf, id2label, opts...), nil
+	// 模型自报的上限先生效，调用方传进来的 Option 仍可覆盖它。
+	opts = append([]Option{WithMaxSeqLen(cfg.MaxSeqLen)}, opts...)
+	return New(name, tk, inf, cfg.ID2Label, opts...), nil
 }
 
-// LoadID2Label 从 config.json 读取标签表。没有标签表就无法把输出映射成实体类型，
-// 因此这里直接报错，而不是退化成 LABEL_0 这种没有意义的输出。
-func LoadID2Label(modelDir string) (map[int]string, error) {
+// ModelConfig 是从模型 config.json 里取出的、推理必需的几项。
+type ModelConfig struct {
+	// ID2Label 是标签表，把模型输出的下标映射成 "B-PER" 这样的标签。
+	ID2Label map[int]string
+	// MaxSeqLen 取自 max_position_embeddings：模型能接受的最长序列。
+	// 读不到时是 DefaultMaxSeqLen。
+	MaxSeqLen int
+}
+
+// LoadModelConfig 从 config.json 读取标签表与序列长度上限。
+//
+// 没有标签表就无法把输出映射成实体类型，因此直接报错，而不是退化成 LABEL_0
+// 这种没有意义的输出；位置编码上限读不到则退回默认值，只是可能截得比模型允许的短。
+func LoadModelConfig(modelDir string) (ModelConfig, error) {
+	cfg := ModelConfig{MaxSeqLen: DefaultMaxSeqLen}
+
 	b, err := os.ReadFile(filepath.Join(modelDir, "config.json"))
 	if err != nil {
-		return nil, fmt.Errorf("%w: 读取 config.json 失败: %v", ErrModelUnavailable, err)
+		return cfg, fmt.Errorf("%w: 读取 config.json 失败: %v", ErrModelUnavailable, err)
 	}
 	var doc struct {
-		ID2Label map[string]string `json:"id2label"`
+		ID2Label              map[string]string `json:"id2label"`
+		MaxPositionEmbeddings *int              `json:"max_position_embeddings"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
-		return nil, fmt.Errorf("%w: 解析 config.json 失败: %v", ErrModelUnavailable, err)
+		return cfg, fmt.Errorf("%w: 解析 config.json 失败: %v", ErrModelUnavailable, err)
 	}
 	if len(doc.ID2Label) == 0 {
-		return nil, fmt.Errorf("%w: config.json 里没有 id2label", ErrModelUnavailable)
+		return cfg, fmt.Errorf("%w: config.json 里没有 id2label", ErrModelUnavailable)
 	}
-	out := make(map[int]string, len(doc.ID2Label))
+
+	cfg.ID2Label = make(map[int]string, len(doc.ID2Label))
 	for k, v := range doc.ID2Label {
 		id, err := strconv.Atoi(k)
 		if err != nil {
 			continue
 		}
-		out[id] = v
+		cfg.ID2Label[id] = v
 	}
-	return out, nil
+	if doc.MaxPositionEmbeddings != nil && *doc.MaxPositionEmbeddings > 0 {
+		cfg.MaxSeqLen = *doc.MaxPositionEmbeddings
+	}
+	return cfg, nil
 }
 
 func (r *Recognizer) Name() string { return r.name }
@@ -179,7 +213,7 @@ func (r *Recognizer) Recognize(ctx context.Context, text string, lang types.Lang
 		}
 	}
 
-	enc := r.tokenizer.Encode(runText, MaxSeqLen)
+	enc := r.tokenizer.Encode(runText, r.maxSeqLen)
 	if convert {
 		tokens := make([]string, len(enc.Tokens))
 		for i, t := range enc.Tokens {

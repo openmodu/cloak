@@ -83,7 +83,9 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	app, err := bootstrap.InitApp(bootstrap.Config{
-		ModelsDir:  confrepo.Resolve(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		ModelsDir:  confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		ENModelID:  confrepo.Resolve("", confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
+		ZHModelID:  confrepo.Resolve("", confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
 		MaskConfig: fileCfg.MaskConfig,
 	})
 	if err != nil {

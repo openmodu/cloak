@@ -64,7 +64,7 @@ curl -s localhost:8844/api/health
 还原凭据（`maskMeta`）**服务端不留存**，随响应交给调用方，还原时原样带回来。
 注意它里面含有原文，要和脱敏前的文本同等看待——不要写进日志，不要转给第三方。
 
-HTTP 和 CLI JSON 输出使用 aifw 小端二进制凭据格式，只序列化命中的文本片段；
+HTTP 和 CLI JSON 输出使用小端二进制凭据格式，只序列化命中的文本片段；
 还原同时接受此格式与 cloak 旧版的 base64(JSON) 格式。详见 [兼容说明](docs/compatibility.md)。
 
 ## 工程约定
@@ -116,6 +116,11 @@ make wire     # 重新生成 internal/bootstrap/wire_gen.go
 中文地址融合按「国家 → 省 → 市 → 区县 → 乡镇 → 道路 → 门牌号 → POI → 楼栋 →
 楼层 → 房间」11 级层级链工作，只有细到门牌号，或同时有 POI 与楼层/房间，才算
 能定位到具体住户的敏感地址——只到「上海市浦东新区」这种粒度不脱敏。
+
+融合失败时有兜底：如果 NER 给出的地址本身已经含门牌号一类的细节，即便层级链拼
+不起来，也保留 NER 的原始边界去脱敏，而不是整条放过。这条兜底是拿真实模型跑出来
+的——某些写法（例如种子正好止于「科兴科学园」这类园区名）会让门牌号在层级规整时
+被当成倒挂删掉，没有兜底就会让一整条完整地址原样漏出去。
 
 ## 配置
 
@@ -230,7 +235,24 @@ curl -s -X POST localhost:8844/api/call -H 'Content-Type: application/json' \
 
 确认无误后把 `openai-base-url` / `openai-api-key` 换成真实的即可。
 
-### 6. 分层约束没有被破坏
+### 6. 真实模型（需要先装 NER，见「启用 NER」）
+
+```bash
+CLOAK_TEST_MODELS_DIR=~/.cloak/models \
+CLOAK_ONNXRUNTIME_LIB=~/.cloak/lib/libonnxruntime.so make test-onnx
+```
+
+这条不允许「模型缺失就退化成纯正则」，缺文件直接失败。已经跑通的样本：
+
+| 输入 | 结果 |
+|---|---|
+| `John Smith works at Microsoft in New York.` | 人名 / 机构 / 地名三项全中，分数 >0.99 |
+| `王小明住在北京市朝阳区建国路88号。` | 人名与地址均命中，偏移落在字符边界上 |
+| `公司在苏州工业园区星海街星海广场2栋18层1802室办公。` | NER 只给出「苏州」「星海街星海广场」两段碎片，融合补全为完整地址 |
+| `请把合同寄到深圳市南山区科技南十二路8-2号科兴科学园C座5层。` | 融合产不出结果，回退到 NER 边界脱敏（见「识别流程」的兜底说明） |
+| `我在上海市浦东新区上班，离家很近。` | 只到区县，够不到隐私阈值，按设计不脱敏 |
+
+### 7. 分层约束没有被破坏
 
 ```bash
 go list -deps ./internal/usecase/... | grep 'cloak/internal/repo' && echo "违规！" || echo "usecase 没有依赖 repo"
@@ -239,38 +261,54 @@ go list -deps ./internal/usecase/... | grep 'cloak/internal/repo' && echo "违�
 ## 启用 NER
 
 默认只有正则，人名、机构名不会被识别；中文地址融合需要 NER 提供种子区间，
-因此也不会生效。启用需要两样东西。
+因此也不会生效。
 
-**一、带 ONNX 支持编译**（需要 cgo 与 ONNX Runtime 动态库）：
+**一键准备模型与运行时**：
+
+```bash
+./scripts/setup-ner.sh                                   # 装到 ~/.cloak
+HF_ENDPOINT=https://hf-mirror.com ./scripts/setup-ner.sh # 走镜像
+CLOAK_HOME=/opt/cloak ./scripts/setup-ner.sh             # 换安装目录
+```
+
+脚本可重复执行，已存在的文件跳过，中断的下载续传。装完约 360 MB：
+ONNX Runtime 动态库 83 MB，两个模型 276 MB。
+
+**带 ONNX 支持编译并运行**（需要 cgo）：
 
 ```bash
 CGO_ENABLED=1 go build -tags cloak_onnx -o bin/cloakd ./cmd/cloakd
-export CLOAK_ONNXRUNTIME_LIB=/path/to/libonnxruntime.so
+
+export CLOAK_ONNXRUNTIME_LIB=~/.cloak/lib/libonnxruntime.so
+export CLOAK_MODELS_DIR=~/.cloak/models
+./bin/cloakd
 ```
 
-动态库从 https://github.com/microsoft/onnxruntime/releases 下对应平台的包即可。
+默认模型是 `Xenova/bert-base-NER`（英文）和
+`Xenova/bert-base-multilingual-cased-ner-hrl`（中文），可以用 `--en-model` /
+`--zh-model`、`CLOAK_EN_MODEL_ID` / `CLOAK_ZH_MODEL_ID` 或配置文件换掉。
+换模型时注意标签集须是 `PER` / `ORG` / `LOC` 这一套，否则 `labelToEntityType`
+认不出来。
 
-**二、准备模型目录**，布局如下：
+模型目录布局：
 
 ```
-<models-dir>/funstory-ai/neurobert-mini/config.json
-<models-dir>/funstory-ai/neurobert-mini/vocab.txt          # 或 tokenizer.json
-<models-dir>/funstory-ai/neurobert-mini/onnx/model_quantized.onnx
-<models-dir>/ckiplab/bert-tiny-chinese-ner/...             # 中文同上
-```
-
-这两个是默认模型（英文 / 中文）。模型从 HuggingFace 下载；仓库里没有现成 ONNX
-的话用 `optimum-cli export onnx` 自行导出并量化。然后：
-
-```bash
-./bin/cloakd --models-dir /path/to/ner-models
-# 或 CLOAK_MODELS_DIR
+<models-dir>/<model-id>/config.json                    # 提供 id2label 与 max_position_embeddings
+<models-dir>/<model-id>/vocab.txt                      # 或 tokenizer.json
+<models-dir>/<model-id>/onnx/model_quantized.onnx
 ```
 
 模型目录不存在、文件缺失、或二进制没带 ONNX 支持，都只打一条 warning 并退化成
 纯正则，不会让服务起不来。
 
-要换模型或接远程推理服务，实现 `internal/repo/nerrepo` 的 `Inferencer` 接口即可：
+验证真实模型：
+
+```bash
+CLOAK_TEST_MODELS_DIR=~/.cloak/models \
+CLOAK_ONNXRUNTIME_LIB=~/.cloak/lib/libonnxruntime.so make test-onnx
+```
+
+要换成远程推理服务，实现 `internal/repo/nerrepo` 的 `Inferencer` 接口即可：
 
 ```go
 type Inferencer interface {
@@ -281,15 +319,56 @@ type Inferencer interface {
 
 ## 已知限制
 
-1. **真实 ONNX 推理需要模型文件验证**。准备模型与运行库后执行
-   `CLOAK_TEST_MODELS_DIR=/path/to/models make test-onnx`。该检查实际加载中英文模型，
-   不允许缺失模型时退化成纯正则；它是冒烟测试，不代表与 aifw 的识别效果完全相同。
-2. **简繁转换使用可选的 OpenCC 命令**。PATH 中存在 `opencc` 时自动接入中文 NER；
-   每次推理批量转换 token。未安装时告警并跳过转换，转换执行失败时中止当前识别。
-3. **没有浏览器 / WASM 端**。Go 编 WASM 在体积与 GC 上都不划算，浏览器侧建议
-   用 JS 单独实现核心逻辑——那部分本身只有几百行。
-4. NER 仍截断到 512 token，超长文本末尾不会被 NER 识别；正则继续扫描全文。
-   `password:` 规则分数仍为 0.4，低于默认阈值，保持现有规则行为。
+按「会不会让你误判工具坏了」排序。
+
+### 1. `password:` 不会被脱敏，`pwd:` 会
+
+```
+my password: hunter2   →  原样输出        规则分数 0.4，低于采纳阈值 0.5
+my pwd: hunter2        →  __PII_PASSWORD_1__   规则分数 0.6
+```
+
+这是规则表里刻意的取值：`password:` 后面跟的往往是文档、提示语而非真实口令，
+分数压在阈值之下以避免误伤。要改就调 `internal/repo/regexrepo/patterns_default.go`
+里 `PASSWORD_LITERAL` 的分数，改完跑金样本回归。
+
+### 2. 默认不脱敏物理地址
+
+`maskAddress` 默认 `false`，因为地址极易误伤正常语句。要打开在配置里写
+`mask_config.maskAddress: true`，或调 `/api/config`。
+
+### 3. 不开 NER 就没有人名、机构名、中文地址
+
+正则只能认有固定形状的东西。人名、机构名要靠模型；中文地址融合也需要 NER
+先给出种子区间，没有 NER 时那套规则一次都不会触发。见「启用 NER」。
+
+### 4. 语言判定是启发式的
+
+按 CJK 字符占比判断中英文，不是概率语言模型。这个判定决定了走不走中文地址融合、
+选哪个 NER 模型，在中英混排和短文本上可能判错。明确知道语言时，HTTP 传
+`language` 字段、CLI 用 `--language` 直接指定，能绕开判定。
+
+### 5. 分词器只覆盖 BERT WordPiece
+
+`pkg/tokenize` 是固定的 BasicTokenizer + WordPiece，只读 `tokenizer_config.json`
+里的 `do_lower_case` 与 `strip_accents`，不执行 `tokenizer.json` 中配置的
+normalizer / pre_tokenizer 流水线。标准 BERT 系模型没问题，换成 BPE 系或带特殊
+归一化配置的模型会对不上。
+
+### 6. 超长文本的尾部不过 NER
+
+按模型 `config.json` 的 `max_position_embeddings` 截断（读不到则 512）。
+超出部分不会被 NER 识别，正则仍然扫描全文。
+
+### 7. 简繁转换依赖外部 `opencc` 命令
+
+PATH 里有 `opencc` 时自动接入中文 NER，每次推理批量转换 token；
+没装则告警跳过，转换执行失败则中止当前识别。
+
+### 8. 没有浏览器 / WASM 端
+
+Go 编 WASM 在体积与 GC 上都不划算。浏览器侧建议用 JS 单独实现核心逻辑——
+那部分本身只有几百行。
 
 ## 开发
 

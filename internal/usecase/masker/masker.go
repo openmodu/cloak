@@ -173,6 +173,21 @@ func mergeChineseAddress(text string, spans []types.Span) []types.Span {
 	out := make([]types.Span, 0, len(spans)+len(addrs))
 	for _, sp := range spans {
 		if sp.Type == types.EntityPhysicalAddress {
+			// 融合结果盖到了这一段就让位给它——融合后的边界更准。
+			//
+			// 但融合有可能什么都产不出来（层级链够不到隐私阈值，比如种子正好
+			// 止于「科兴科学园」这类园区名，门牌号在规整时被判为层级倒挂删掉）。
+			// 这种时候必须把原始区间留下：宁可按 NER 的边界脱敏，
+			// 也不能让一整条已经识别出来的地址原样漏出去。
+			if overlapsAny(sp, addrs) {
+				continue
+			}
+			// 融合没产出时再看一眼种子本身：只到区县这种粒度定位不到人，
+			// 按原有的隐私阈值丢弃；已经含门牌号的则保留。
+			if !zhaddr.ContainsPrivateDetail(text, sp.Start, sp.End) {
+				continue
+			}
+			out = append(out, sp)
 			continue
 		}
 		if sp.Type == types.EntityOrganization && coveredByAny(sp, addrs) {
@@ -201,6 +216,19 @@ func seedKindOf(t types.EntityType) zhaddr.SeedKind {
 	default:
 		return zhaddr.SeedOther
 	}
+}
+
+// overlapsAny 判断区间是否与任一融合结果相交。
+// 这里用「相交」而不是「被完全覆盖」：融合结果与原始种子只要有重叠，
+// 就说明它们指的是同一处地址，留两份会让后续的重叠消解按分数二选一，
+// 反而可能丢掉融合补全出来的部分。
+func overlapsAny(sp types.Span, addrs []zhaddr.Result) bool {
+	for _, a := range addrs {
+		if sp.Start < a.End && a.Start < sp.End {
+			return true
+		}
+	}
+	return false
 }
 
 func coveredByAny(sp types.Span, addrs []zhaddr.Result) bool {

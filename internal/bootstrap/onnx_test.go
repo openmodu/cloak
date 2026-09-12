@@ -4,6 +4,7 @@ package bootstrap_test
 
 import (
 	"context"
+	"github.com/openmodu/cloak/internal/bootstrap"
 	"github.com/openmodu/cloak/internal/repo/nerrepo"
 	"github.com/openmodu/cloak/internal/types"
 	"github.com/openmodu/cloak/pkg/onnxrt"
@@ -18,12 +19,16 @@ func TestRealONNX(t *testing.T) {
 	if root == "" {
 		t.Skip("set CLOAK_TEST_MODELS_DIR to exercise real models")
 	}
+	// 模型 id 可以用环境变量换掉，默认取装配层的默认模型。
+	enID := envOr("CLOAK_TEST_EN_MODEL", bootstrap.DefaultENModelID)
+	zhID := envOr("CLOAK_TEST_ZH_MODEL", bootstrap.DefaultZHModelID)
+
 	for _, tc := range []struct {
 		id, text string
 		lang     types.Language
 	}{
-		{"funstory-ai/neurobert-mini", "John Smith works at Microsoft in New York.", types.LangEnglish},
-		{"ckiplab/bert-tiny-chinese-ner", "王小明住在北京市朝阳区建国路88号。", types.LangZhHans},
+		{enID, "John Smith works at Microsoft in New York.", types.LangEnglish},
+		{zhID, "王小明住在北京市朝阳区建国路88号。", types.LangZhHans},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			dir := filepath.Join(root, tc.id)
@@ -59,4 +64,11 @@ func TestRealONNX(t *testing.T) {
 			}
 		})
 	}
+}
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

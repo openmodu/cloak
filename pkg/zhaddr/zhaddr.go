@@ -92,6 +92,20 @@ func Merge(text string, seeds []Seed) []Result {
 	return out
 }
 
+// ContainsPrivateDetail 判断一段文本里是否出现过门牌号，或者 POI 加楼层/房间——
+// 也就是够不够细到能定位到具体住户。
+//
+// 它只看窗口里**出现过什么成分**，不做层级链规整。规整是为了把碎片拼成一条完整
+// 地址用的，会把顺序倒挂的成分删掉；而判断「这段文字敏不敏感」不该受拼接顺序影响。
+// 调用方在融合产不出结果时用它兜底，避免把已经含门牌号的地址整条放过。
+func ContainsPrivateDetail(text string, start, end int) bool {
+	if start < 0 || end > len(text) || start >= end {
+		return false
+	}
+	bits, _, _ := scanTokens(text, start, end, end)
+	return reachedPrivacyThreshold(bits)
+}
+
 // reachedPrivacyThreshold 判断地址链是否细到足以定位到具体住户。
 func reachedPrivacyThreshold(bits uint32) bool {
 	return bits&bitL5 != 0 ||
