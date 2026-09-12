@@ -1,0 +1,35 @@
+# cloak 服务配置示例。字段名沿用上游 aifw.yaml，既有配置可直接搬过来。
+# 取值优先级：命令行 > 环境变量 > 本文件 > 默认值。
+# 环境变量同时认 CLOAK_ 与 AIFW_ 两个前缀，例如 CLOAK_PORT / AIFW_PORT。
+
+port: 8844
+
+# LLM API key 文件路径。不配则不接入大模型，/api/call 返回 503，
+# 脱敏与还原接口照常工作。文件格式：
+# {
+#   "openai-api-key": "your-key",
+#   "openai-base-url": "https://api.openai.com/v1",
+#   "openai-model": "gpt-4o-mini"
+# }
+# api_key_file: ~/.cloak/your-key.json
+
+# 本服务自身的访问口令。留空则不校验 Authorization 头。
+# http_api_key: change-me
+
+log_level: "INFO"
+temperature: 0.0
+
+# 各类敏感实体的脱敏开关。默认除物理地址外全开。
+mask_config:
+  maskAddress: false
+  maskEmail: true
+  maskOrganization: true
+  maskUserName: true
+  maskPhoneNumber: true
+  maskBankNumber: true
+  maskPayment: true
+  maskVerificationCode: true
+  maskPassword: true
+  maskRandomSeed: true
+  maskPrivateKey: true
+  maskUrl: true

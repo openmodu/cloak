@@ -1,0 +1,150 @@
+package bootstrap
+
+import (
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"github.com/google/wire"
+
+	"github.com/openmodu/cloak/internal/repo/confrepo"
+	"github.com/openmodu/cloak/internal/repo/langrepo"
+	"github.com/openmodu/cloak/internal/repo/llmrepo"
+	"github.com/openmodu/cloak/internal/repo/nerrepo"
+	"github.com/openmodu/cloak/internal/repo/regexrepo"
+	httptransport "github.com/openmodu/cloak/internal/transport/http"
+	"github.com/openmodu/cloak/internal/types"
+	"github.com/openmodu/cloak/internal/usecase"
+	"github.com/openmodu/cloak/internal/usecase/masker"
+	"github.com/openmodu/cloak/internal/usecase/proxy"
+	"github.com/openmodu/cloak/internal/usecase/restorer"
+	"github.com/openmodu/cloak/pkg/onnxrt"
+)
+
+// RepoSet 汇集 repo 层实现，并把它们绑定到 usecase 声明的接口上。
+// 换实现（正则 → NER、启发式语言判定 → 第三方库）只需改这里的绑定。
+var RepoSet = wire.NewSet(
+	regexrepo.NewDefaultSet,
+	ProvideNERRecognizers,
+	ProvideRecognizers,
+
+	langrepo.New,
+	wire.Bind(new(usecase.LangDetector), new(*langrepo.Detector)),
+
+	confrepo.NewDefault,
+	wire.Bind(new(usecase.ConfigStore), new(*confrepo.Memory)),
+)
+
+// UseCaseSet 汇集用例对象的构造。
+var UseCaseSet = wire.NewSet(
+	ProvideMasker,
+	restorer.New,
+)
+
+// ProviderSet 是完整的装配集合。
+var ProviderSet = wire.NewSet(
+	RepoSet,
+	UseCaseSet,
+	NewApp,
+)
+
+// ProvideRecognizers 决定启用哪些识别器以及它们的顺序。
+//
+// 上游按实体类型枚举顺序建出一整组正则识别器，再把 NER 的结果接在它们后面；
+// 这个顺序影响同分同范围区间的取舍，不要随意调整。
+// 接入 NER 后在这里追加一个实现即可，masker 不需要任何改动。
+func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) []usecase.Recognizer {
+	out := make([]usecase.Recognizer, 0, len(rx)+len(ner))
+	for _, r := range rx {
+		out = append(out, r)
+	}
+	for _, r := range ner {
+		out = append(out, r)
+	}
+	return out
+}
+
+// 上游按语言在中英两个模型之间二选一，模型 id 与目录布局见 aifw 的 copy-assets 脚本。
+var nerModels = []struct {
+	id      string
+	forLang func(types.Language) bool
+}{
+	{"funstory-ai/neurobert-mini", func(l types.Language) bool { return !l.IsChinese() }},
+	{"ckiplab/bert-tiny-chinese-ner", func(l types.Language) bool { return l.IsChinese() }},
+}
+
+// ProvideNERRecognizers 按上游的目录约定加载模型：
+// <ModelsDir>/<model-id>/onnx/model_quantized.onnx 及同目录的 config.json、vocab。
+//
+// 任何一步不成立都只打一条警告并退化成纯正则，而不是让整个服务起不来——
+// 上游在模型缺失时也是这么做的。
+func ProvideNERRecognizers(cfg Config) ([]*nerrepo.Recognizer, error) {
+	if cfg.ModelsDir == "" {
+		return nil, nil
+	}
+	var out []*nerrepo.Recognizer
+	for _, m := range nerModels {
+		dir := filepath.Join(cfg.ModelsDir, filepath.FromSlash(m.id))
+		modelPath := filepath.Join(dir, "onnx", "model_quantized.onnx")
+		if _, err := os.Stat(modelPath); err != nil {
+			slog.Warn("NER 模型缺失，该语言退化为纯正则", "model", m.id, "path", modelPath)
+			continue
+		}
+		sess, err := onnxrt.Open(modelPath)
+		if err != nil {
+			slog.Warn("NER 模型加载失败，该语言退化为纯正则", "model", m.id, "err", err)
+			continue
+		}
+		rec, err := nerrepo.LoadFromDir("ner:"+m.id, dir, sess,
+			nerrepo.WithLanguageFilter(m.forLang))
+		if err != nil {
+			slog.Warn("NER 模型初始化失败，该语言退化为纯正则", "model", m.id, "err", err)
+			_ = sess.Close()
+			continue
+		}
+		slog.Info("已加载 NER 模型", "model", m.id)
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+// ProvideMasker 把注入的依赖翻译成 masker 的函数选项。
+func ProvideMasker(rs []usecase.Recognizer, d usecase.LangDetector, c usecase.ConfigStore) *masker.Masker {
+	return masker.New(
+		masker.WithRecognizers(rs...),
+		masker.WithLangDetector(d),
+		masker.WithConfigStore(c),
+	)
+}
+
+// ServerSet 在基础装配之上补齐 HTTP 服务需要的部件。
+var ServerSet = wire.NewSet(
+	ProviderSet,
+	ProvideLLMClient,
+	ProvideProxy,
+	ProvideHTTPServer,
+)
+
+// ProvideLLMClient 只在配置了 API key 文件时才构造客户端。
+// 没配就返回 nil，让上层明确地把「未接入大模型」这件事告诉调用方。
+func ProvideLLMClient(cfg Config) (usecase.LLMClient, error) {
+	if cfg.APIKeyFile == "" {
+		return nil, nil
+	}
+	return llmrepo.NewFromFile(cfg.APIKeyFile)
+}
+
+// ProvideProxy 在没有 LLM 客户端时返回 nil，由 HTTP 层据此回 503。
+func ProvideProxy(m *masker.Masker, r *restorer.Restorer, llm usecase.LLMClient) *proxy.Proxy {
+	if llm == nil {
+		return nil
+	}
+	return proxy.New(m, r, llm)
+}
+
+func ProvideHTTPServer(app *App, p *proxy.Proxy, cfg Config) *httptransport.Server {
+	return httptransport.New(app.Masker, app.Restorer, app.Conf,
+		httptransport.WithProxy(p),
+		httptransport.WithAPIKey(cfg.HTTPAPIKey),
+	)
+}

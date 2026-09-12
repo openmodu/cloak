@@ -1,0 +1,28 @@
+Please translate the following to Chinese:
+
+Dear Support Team,
+
+This is John A. Doe from Acme Corporation (Username: johndoe_1984). I'm reaching out about a small account issue—sorry if this message is a bit long 🙏. 
+
+My home address is: __PII_VERIFICATION_CODE_1__ Elm Street, Suite 56, Springfield, IL __PII_VERIFICATION_CODE_2__ (yep, the old adress—spelled wrong on my last form, my bad!).
+You can reach me at my email: __PII_EMAIL_ADDRESS_3__, or call me at __PII_PHONE_NUMBER_4__. When I'm in China, my mobile is __PII_PHONE_NUMBER_5__ (still active).
+
+For the refund you mentioned, my bank account number is __PII_PHONE_NUMBER_6__. Alternatively, you can use my payment card (dummy for testing only): Visa __PII_PHONE_NUMBER_7__, CVV 123, exp 12/34 — please DO NOT actually charge this; it's just a placeholder for your QA case.
+
+To log in to the staging portal, use this temporary verification code: __PII_VERIFICATION_CODE_8__. For the sandbox box, the pwd: __PII_PASSWORD_9__ (I'll reset it after your tests, promise!).
+
+For our wallet demo (again, test data only), here's the seed phrase: river apple orange cable window magnet winter fee bonus ladder camera peach.
+And below is a dummy private key block (not real, just for parsing checks):
+-----BEGIN PRIVATE KEY-----
+MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQC1w8P1x0kQbZpx
+uH7u2/1aYgH0b8oE4R2H3yV2gJg0f2oTg9zZQ97lP0JqR9x8Xx4j6ya2q4Z3Xx2F
+m2T1z+qk0a5Dq7mWkKX8rJq6fQIDAQABAoIBAQCd9E2J4K1Y9uRFGk1V3k1kGm3T
+l9aZKqv0o4h5zY+G7n8Gg3PzKj3e3lG7K1f5m0zV3Y1gM3s1V9r7YjX2Z2c9uL8k
+-----END PRIVATE KEY-----
+
+If you need more info, see __PII_URL_ADDRESS_10__ — or our docs at www.example.org/guide?lang=en-US (sometimes the intranet link __PII_URL_ADDRESS_11__ redirects weirdly, FYI).
+
+Thanks a ton for your help! If anything looks off, feel free to ping me back.
+
+Sincerely,
+John
