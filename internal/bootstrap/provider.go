@@ -67,9 +67,11 @@ func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) [
 
 // 中英文各挂一个模型，按语言分流。模型 id 同时也是它在模型根目录下的相对路径。
 // 默认模型。标签集须是 PER / ORG / LOC 这一套，否则 labelToEntityType 认不出来。
+// 这两个必须与 scripts/setup-ner.sh 下载的模型保持一致，否则装完仍然加载不到，
+// 而加载失败是静默降级成纯正则的——看起来就像「模型不太准」，极难排查。
 const (
-	DefaultENModelID = "funstory-ai/neurobert-mini"
-	DefaultZHModelID = "ckiplab/bert-tiny-chinese-ner"
+	DefaultENModelID = "Xenova/bert-base-NER"
+	DefaultZHModelID = "Xenova/bert-base-multilingual-cased-ner-hrl"
 )
 
 // nerModelsFor 决定启用哪些模型、各自负责哪种语言。
@@ -143,7 +145,7 @@ func ProvideMasker(rs []usecase.Recognizer, d usecase.LangDetector, c usecase.Co
 		masker.WithRecognizers(rs...),
 		masker.WithLangDetector(d),
 		masker.WithConfigStore(c),
-		masker.WithAddressFallback(cfg.AddressFallback),
+		masker.WithAddressFallback(cfg.addressFallbackOrDefault()),
 	)
 }
 

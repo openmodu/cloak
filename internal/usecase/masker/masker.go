@@ -26,8 +26,11 @@ type Masker struct {
 	addressFallback bool
 }
 
-// WithAddressFallback opts into retaining private NER seeds rejected by the
-// address merger. Disabled by default to preserve aifw's filtering policy.
+// WithAddressFallback 控制地址融合失败时是否保留 NER 的原始地址区间。
+//
+// 默认开启。关掉意味着：NER 已经正确识别出的完整地址，只要层级链拼不起来就会
+// 整条放过——对脱敏工具来说这是漏数据，不该是默认行为。只有在确实需要更保守的
+// 脱敏面（宁可漏标也不要误伤正常语句）时才关。
 func WithAddressFallback(enabled bool) Option { return func(m *Masker) { m.addressFallback = enabled } }
 
 type Option func(*Masker)
@@ -53,7 +56,7 @@ func WithMinScore(s float32) Option {
 }
 
 func New(opts ...Option) *Masker {
-	m := &Masker{minScore: DefaultMinScore}
+	m := &Masker{minScore: DefaultMinScore, addressFallback: true}
 	for _, opt := range opts {
 		opt(m)
 	}

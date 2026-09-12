@@ -1,3 +1,6 @@
 bin/
 *.test
 *.out
+
+# 某些工具把 SQLite 的 :memory: 标识当成路径写出来的产物
+:memory:*

@@ -45,3 +45,27 @@ func TestResolvePathExpandsAllSources(t *testing.T) {
 		t.Fatalf("命令行来源没展开: %q", got)
 	}
 }
+
+// 对布尔量而言 false 是有意义的取值，不能拿它当「未设置」。
+func TestResolveBool(t *testing.T) {
+	yes, no := true, false
+
+	if got := ResolveBool(nil, nil, nil, true); !got {
+		t.Fatal("三层都没设置时应当取默认值")
+	}
+	if got := ResolveBool(nil, nil, &no, true); got {
+		t.Fatal("配置文件里的 false 必须能覆盖默认值 true")
+	}
+	if got := ResolveBool(&no, nil, &yes, true); got {
+		t.Fatal("命令行优先级最高")
+	}
+
+	t.Setenv("CLOAK_TEST_BOOL", "false")
+	if got := ResolveBool(nil, []string{"CLOAK_TEST_BOOL"}, &yes, true); got {
+		t.Fatal("环境变量应当覆盖配置文件")
+	}
+	t.Setenv("CLOAK_TEST_BOOL", "不是布尔值")
+	if got := ResolveBool(nil, []string{"CLOAK_TEST_BOOL"}, &no, true); got {
+		t.Fatal("环境变量无法解析时应当退到配置文件")
+	}
+}

@@ -87,7 +87,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		ENModelID:       confrepo.Resolve("", confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
 		ZHModelID:       confrepo.Resolve("", confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
 		MaskConfig:      fileCfg.MaskConfig,
-		AddressFallback: fileCfg.AddressFallback,
+		AddressFallback: addressFallback(fileCfg.AddressFallback),
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "初始化失败:", err)
@@ -181,4 +181,10 @@ func readInput(file string, stdin io.Reader) (string, error) {
 	}
 	b, err := os.ReadFile(file)
 	return string(b), err
+}
+
+// addressFallback 让 CLI 也能用环境变量覆盖配置文件。
+func addressFallback(fileVal *bool) *bool {
+	v := confrepo.ResolveBool(nil, confrepo.EnvNames("ADDRESS_FALLBACK"), fileVal, true)
+	return &v
 }

@@ -22,7 +22,7 @@ type FileConfig struct {
 	LogLevel        string           `yaml:"log_level"`
 	Temperature     float32          `yaml:"temperature"`
 	MaskConfig      map[string]*bool `yaml:"mask_config"`
-	AddressFallback bool             `yaml:"address_fallback"`
+	AddressFallback *bool            `yaml:"address_fallback"`
 }
 
 // LoadFile 在未指定路径时使用默认配置；显式路径不存在时报错，避免误用默认脱敏开关。
@@ -64,6 +64,28 @@ func Resolve(flagVal string, envNames []string, fileVal string, def string) stri
 // os.Stat——不展开的话只会得到一句「文件不存在」，让人以为是模型没装好。
 func ResolvePath(flagVal string, envNames []string, fileVal string, def string) string {
 	return expandHome(Resolve(flagVal, envNames, fileVal, def))
+}
+
+// ResolveBool 是 Resolve 的布尔版本。三层来源都用 *bool 表达「没设置」，
+// 因为对布尔量而言 false 是一个有意义的取值，不能拿它当「未设置」。
+// 环境变量接受 1/t/T/true/TRUE/0/f/F/false/FALSE 等 strconv.ParseBool 认得的写法。
+func ResolveBool(flagVal *bool, envNames []string, fileVal *bool, def bool) bool {
+	if flagVal != nil {
+		return *flagVal
+	}
+	for _, name := range envNames {
+		v := strings.TrimSpace(os.Getenv(name))
+		if v == "" {
+			continue
+		}
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	if fileVal != nil {
+		return *fileVal
+	}
+	return def
 }
 
 // ResolveInt 是 Resolve 的整数版本，0 视为未设置。

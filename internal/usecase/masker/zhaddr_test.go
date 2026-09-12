@@ -180,3 +180,52 @@ func TestOriginalAddressDroppedWhenMergeSucceeds(t *testing.T) {
 		t.Fatalf("应当是融合后的完整地址，实际 %q", got)
 	}
 }
+
+// 地址兜底必须默认开启：NER 已经识别出的完整地址，不该因为层级链拼不起来就整条放过。
+// 这条默认值是隐私相关的，改动前请想清楚。
+func TestAddressFallbackDefaultsOn(t *testing.T) {
+	const text = "请把合同寄到深圳市南山区科技南十二路8-2号科兴科学园C座5层。"
+	const seed = "深圳市南山区科技南十二路8-2号科兴科学园"
+
+	start := strings.Index(text, seed)
+	// 刻意不传 WithAddressFallback，走默认值
+	m := New(
+		WithRecognizers(stubRecognizer{name: "ner", spans: []types.Span{
+			{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99},
+		}}),
+		WithLangDetector(zhDetector{}),
+		WithConfigStore(&stubConf{cfg: types.EnableAllMaskConfig()}),
+	)
+
+	items, err := m.Spans(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || text[items[0].Start:items[0].End] != seed {
+		t.Fatalf("默认配置下这条地址必须被脱敏，实际: %+v", items)
+	}
+}
+
+// 显式关掉时恢复成只认融合结果的严格策略。
+func TestAddressFallbackCanBeDisabled(t *testing.T) {
+	const text = "请把合同寄到深圳市南山区科技南十二路8-2号科兴科学园C座5层。"
+	const seed = "深圳市南山区科技南十二路8-2号科兴科学园"
+
+	start := strings.Index(text, seed)
+	m := New(
+		WithRecognizers(stubRecognizer{name: "ner", spans: []types.Span{
+			{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99},
+		}}),
+		WithLangDetector(zhDetector{}),
+		WithConfigStore(&stubConf{cfg: types.EnableAllMaskConfig()}),
+		WithAddressFallback(false),
+	)
+
+	items, err := m.Spans(context.Background(), text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("关掉兜底后应当没有地址区间，实际: %+v", items)
+	}
+}
