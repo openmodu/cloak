@@ -54,14 +54,15 @@ func run() error {
 		confrepo.ResolveInt(*port, confrepo.EnvNames("PORT"), fileCfg.Port, defaultPort),
 	)
 	cfg := bootstrap.Config{
-		ModelsDir:   confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
-		ENModelID:   confrepo.Resolve(*enModelID, confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
-		ZHModelID:   confrepo.Resolve(*zhModelID, confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
-		APIKeyFile:  confrepo.ResolvePath(*apiKeyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""),
-		HTTPAPIKey:  confrepo.Resolve(*httpAPIKey, confrepo.EnvNames("HTTP_API_KEY"), fileCfg.HTTPAPIKey, ""),
-		APIKeyDir:   confrepo.ResolvePath(*apiKeyDir, confrepo.EnvNames("API_KEY_DIR"), fileCfg.APIKeyDir, ""),
-		MaskConfig:  fileCfg.MaskConfig,
-		Temperature: resolvedTemperature,
+		ModelsDir:       confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		ENModelID:       confrepo.Resolve(*enModelID, confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
+		ZHModelID:       confrepo.Resolve(*zhModelID, confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
+		APIKeyFile:      confrepo.ResolvePath(*apiKeyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""),
+		HTTPAPIKey:      confrepo.Resolve(*httpAPIKey, confrepo.EnvNames("HTTP_API_KEY"), fileCfg.HTTPAPIKey, ""),
+		APIKeyDir:       confrepo.ResolvePath(*apiKeyDir, confrepo.EnvNames("API_KEY_DIR"), fileCfg.APIKeyDir, ""),
+		MaskConfig:      fileCfg.MaskConfig,
+		AddressFallback: fileCfg.AddressFallback,
+		Temperature:     resolvedTemperature,
 	}
 	level := new(slog.Level)
 	if value := confrepo.Resolve(*logLevel, confrepo.EnvNames("LOG_LEVEL"), fileCfg.LogLevel, "INFO"); value != "" {

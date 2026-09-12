@@ -124,17 +124,21 @@ func LoadFromDir(name, modelDir string, inf Inferencer, opts ...Option) (*Recogn
 	if err != nil {
 		return nil, err
 	}
-	// 模型自报的上限先生效，调用方传进来的 Option 仍可覆盖它。
+	// 模型和分词器上限先生效；调用方只可进一步缩短。
 	opts = append([]Option{WithMaxSeqLen(cfg.MaxSeqLen)}, opts...)
-	return New(name, tk, inf, cfg.ID2Label, opts...), nil
+	r := New(name, tk, inf, cfg.ID2Label, opts...)
+	if r.maxSeqLen < 2 || r.maxSeqLen > cfg.MaxSeqLen {
+		return nil, fmt.Errorf("%w: sequence length must be between 2 and %d", ErrModelUnavailable, cfg.MaxSeqLen)
+	}
+	return r, nil
 }
 
 // ModelConfig 是从模型 config.json 里取出的、推理必需的几项。
 type ModelConfig struct {
 	// ID2Label 是标签表，把模型输出的下标映射成 "B-PER" 这样的标签。
 	ID2Label map[int]string
-	// MaxSeqLen 取自 max_position_embeddings：模型能接受的最长序列。
-	// 读不到时是 DefaultMaxSeqLen。
+	// MaxSeqLen 取位置编码上限和 tokenizer model_max_length 的较小值。
+	// 位置编码上限缺失时使用 DefaultMaxSeqLen。
 	MaxSeqLen int
 }
 
@@ -170,6 +174,30 @@ func LoadModelConfig(modelDir string) (ModelConfig, error) {
 	}
 	if doc.MaxPositionEmbeddings != nil && *doc.MaxPositionEmbeddings > 0 {
 		cfg.MaxSeqLen = *doc.MaxPositionEmbeddings
+	}
+	b, err = os.ReadFile(filepath.Join(modelDir, "tokenizer_config.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return cfg, err
+	}
+	if err == nil {
+		var tokenizer struct {
+			MaxLength *float64 `json:"model_max_length"`
+		}
+		if err := json.Unmarshal(b, &tokenizer); err != nil {
+			return cfg, err
+		}
+		if n := tokenizer.MaxLength; n != nil {
+			if *n < 2 {
+				return cfg, fmt.Errorf("%w: invalid model_max_length", ErrModelUnavailable)
+			}
+			// Hugging Face uses a very large sentinel for an unspecified limit.
+			if *n < float64(cfg.MaxSeqLen) {
+				cfg.MaxSeqLen = int(*n)
+			}
+		}
+	}
+	if cfg.MaxSeqLen < 2 {
+		return cfg, fmt.Errorf("%w: invalid sequence limit", ErrModelUnavailable)
 	}
 	return cfg, nil
 }

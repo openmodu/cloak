@@ -12,16 +12,17 @@ import (
 
 // FileConfig 是 cloak.yaml 的结构。
 type FileConfig struct {
-	Port        int              `yaml:"port"`
-	APIKeyFile  string           `yaml:"api_key_file"`
-	ModelsDir   string           `yaml:"models_dir"`
-	ENModelID   string           `yaml:"en_model_id"`
-	ZHModelID   string           `yaml:"zh_model_id"`
-	HTTPAPIKey  string           `yaml:"http_api_key"`
-	APIKeyDir   string           `yaml:"api_key_dir"`
-	LogLevel    string           `yaml:"log_level"`
-	Temperature float32          `yaml:"temperature"`
-	MaskConfig  map[string]*bool `yaml:"mask_config"`
+	Port            int              `yaml:"port"`
+	APIKeyFile      string           `yaml:"api_key_file"`
+	ModelsDir       string           `yaml:"models_dir"`
+	ENModelID       string           `yaml:"en_model_id"`
+	ZHModelID       string           `yaml:"zh_model_id"`
+	HTTPAPIKey      string           `yaml:"http_api_key"`
+	APIKeyDir       string           `yaml:"api_key_dir"`
+	LogLevel        string           `yaml:"log_level"`
+	Temperature     float32          `yaml:"temperature"`
+	MaskConfig      map[string]*bool `yaml:"mask_config"`
+	AddressFallback bool             `yaml:"address_fallback"`
 }
 
 // LoadFile 在未指定路径时使用默认配置；显式路径不存在时报错，避免误用默认脱敏开关。

@@ -10,6 +10,9 @@ func TestDetectScript(t *testing.T) {
 	}{
 		{"纯英文", "Hello world, this is a test.", ScriptLatin},
 		{"简体中文", "我的家庭住址是北京市朝阳区", ScriptHans},
+		{"共用字不是繁体标记", "经理把方案送到北京市朝阳区建国路88号", ScriptHans},
+		{"孤立假名", "请寄到北京市朝阳区建国路88号，备注の", ScriptHans},
+		{"孤立韩文", "请寄到北京市朝阳区建国路88号，备注한", ScriptHans},
 		{"繁体中文", "我的家庭住址是臺北市信義區這裡", ScriptHant},
 		{"中英混排按中文处理", "我的 email 是 test@example.com", ScriptHans},
 		{"英文里夹一两个汉字仍按英文", "The character 中 appears once in this long English sentence about nothing", ScriptLatin},

@@ -27,9 +27,13 @@ func LoadAPIKeyFile(path string) (APIKeyFile, error) {
 	if err != nil {
 		return APIKeyFile{}, fmt.Errorf("read api key file: %w", err)
 	}
+	return ParseAPIKeyFile(b)
+}
+
+func ParseAPIKeyFile(b []byte) (APIKeyFile, error) {
 	var raw map[string]any
 	if err := json.Unmarshal(b, &raw); err != nil {
-		return APIKeyFile{}, fmt.Errorf("parse api key file %s: %w", path, err)
+		return APIKeyFile{}, fmt.Errorf("parse api key file: %w", err)
 	}
 	cfg := APIKeyFile{
 		APIKey:  pick(raw, "openai-api-key", "openai_api_key"),
@@ -37,7 +41,7 @@ func LoadAPIKeyFile(path string) (APIKeyFile, error) {
 		Model:   pick(raw, "openai-model", "openai_model"),
 	}
 	if cfg.APIKey == "" {
-		return cfg, fmt.Errorf("api key file %s: 缺少 openai-api-key", path)
+		return cfg, fmt.Errorf("api key file: 缺少 openai-api-key")
 	}
 	return cfg, nil
 }

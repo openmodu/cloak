@@ -23,8 +23,10 @@ port: 8844
 #
 # 两个模型在 models_dir 下的相对路径，留空用默认值。
 # 标签集须是 PER / ORG / LOC 这一套。
-# en_model_id: Xenova/bert-base-NER
-# zh_model_id: Xenova/bert-base-multilingual-cased-ner-hrl
+# en_model_id: funstory-ai/neurobert-mini
+# zh_model_id: ckiplab/bert-tiny-chinese-ner
+# 与 aifw 不同的地址隐私兜底（默认关闭）
+address_fallback: false
 
 log_level: "INFO"
 temperature: 0.0

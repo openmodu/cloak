@@ -121,17 +121,23 @@ func LoadConfig(modelDir string) (Config, error) {
 		return cfg, err
 	}
 	var doc struct {
-		DoLowerCase  *bool   `json:"do_lower_case"`
-		StripAccents *bool   `json:"strip_accents"`
-		UnkToken     *string `json:"unk_token"`
-		ClsToken     *string `json:"cls_token"`
-		SepToken     *string `json:"sep_token"`
+		DoLowerCase          *bool    `json:"do_lower_case"`
+		DoBasicTokenize      *bool    `json:"do_basic_tokenize"`
+		TokenizeChineseChars *bool    `json:"tokenize_chinese_chars"`
+		NeverSplit           []string `json:"never_split"`
+		StripAccents         *bool    `json:"strip_accents"`
+		UnkToken             *string  `json:"unk_token"`
+		ClsToken             *string  `json:"cls_token"`
+		SepToken             *string  `json:"sep_token"`
 	}
 	if err := json.Unmarshal(b, &doc); err != nil {
 		return cfg, fmt.Errorf("parse tokenizer_config.json: %w", err)
 	}
 	if doc.DoLowerCase != nil {
 		cfg.DoLowerCase = *doc.DoLowerCase
+	}
+	if (doc.DoBasicTokenize != nil && !*doc.DoBasicTokenize) || (doc.TokenizeChineseChars != nil && !*doc.TokenizeChineseChars) || len(doc.NeverSplit) > 0 {
+		return cfg, &ErrUnsupportedTokenizer{Reason: "disabled basic/Chinese tokenization or never_split is unsupported"}
 	}
 	cfg.StripAccents = doc.StripAccents
 	if doc.UnkToken != nil {

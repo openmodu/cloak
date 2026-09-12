@@ -19,11 +19,16 @@ const DefaultMinScore float32 = 0.5
 
 // Masker 是脱敏用例对象。它只持有接口，不关心识别能力来自正则还是模型。
 type Masker struct {
-	recognizers []usecase.Recognizer
-	detector    usecase.LangDetector
-	conf        usecase.ConfigStore
-	minScore    float32
+	recognizers     []usecase.Recognizer
+	detector        usecase.LangDetector
+	conf            usecase.ConfigStore
+	minScore        float32
+	addressFallback bool
 }
+
+// WithAddressFallback opts into retaining private NER seeds rejected by the
+// address merger. Disabled by default to preserve aifw's filtering policy.
+func WithAddressFallback(enabled bool) Option { return func(m *Masker) { m.addressFallback = enabled } }
 
 type Option func(*Masker)
 
@@ -146,7 +151,7 @@ func (m *Masker) detectSpans(ctx context.Context, text string, lang types.Langua
 	}
 
 	if lang.IsChinese() {
-		merged = mergeChineseAddress(text, merged)
+		merged = mergeChineseAddressWithPolicy(text, merged, m.addressFallback)
 	}
 
 	merged = m.sanitize(merged, len(text))
@@ -159,6 +164,10 @@ func (m *Masker) detectSpans(ctx context.Context, text string, lang types.Langua
 // 全部让位给融合结果；机构名若已被某个融合地址完整覆盖（例如「K11購物藝術館」
 // 本身就是地址的一部分），也一并让位，避免同一段文字被两种类型重复认领。
 func mergeChineseAddress(text string, spans []types.Span) []types.Span {
+	return mergeChineseAddressWithPolicy(text, spans, false)
+}
+
+func mergeChineseAddressWithPolicy(text string, spans []types.Span, fallback bool) []types.Span {
 	seeds := make([]zhaddr.Seed, 0, len(spans))
 	for _, sp := range spans {
 		seeds = append(seeds, zhaddr.Seed{
@@ -173,6 +182,9 @@ func mergeChineseAddress(text string, spans []types.Span) []types.Span {
 	out := make([]types.Span, 0, len(spans)+len(addrs))
 	for _, sp := range spans {
 		if sp.Type == types.EntityPhysicalAddress {
+			if !fallback {
+				continue
+			}
 			// 融合结果盖到了这一段就让位给它——融合后的边界更准。
 			//
 			// 但融合有可能什么都产不出来（层级链够不到隐私阈值，比如种子正好

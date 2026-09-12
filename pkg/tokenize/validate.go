@@ -30,10 +30,12 @@ type tokenizerJSON struct {
 }
 
 type normalizerJSON struct {
-	Type         string            `json:"type"`
-	Lowercase    *bool             `json:"lowercase"`
-	StripAccents *bool             `json:"strip_accents"`
-	Normalizers  []*normalizerJSON `json:"normalizers"`
+	Type               string            `json:"type"`
+	Lowercase          *bool             `json:"lowercase"`
+	StripAccents       *bool             `json:"strip_accents"`
+	CleanText          *bool             `json:"clean_text"`
+	HandleChineseChars *bool             `json:"handle_chinese_chars"`
+	Normalizers        []*normalizerJSON `json:"normalizers"`
 }
 
 type componentJSON struct {
@@ -71,9 +73,12 @@ func checkPreTokenizer(c *componentJSON) error {
 		return nil
 	}
 	switch c.Type {
-	case "BertPreTokenizer", "Whitespace", "WhitespaceSplit", "Punctuation":
+	case "BertPreTokenizer":
 		return nil
 	case "Sequence":
+		if len(c.PreTokenizers) != 1 {
+			return &ErrUnsupportedTokenizer{Reason: "pre-tokenizer Sequence must contain exactly one BertPreTokenizer"}
+		}
 		for _, sub := range c.PreTokenizers {
 			if err := checkPreTokenizer(sub); err != nil {
 				return err
@@ -93,6 +98,11 @@ func applyNormalizer(n *normalizerJSON, cfg *Config) error {
 	}
 	switch n.Type {
 	case "BertNormalizer":
+		if (n.CleanText != nil && !*n.CleanText) || (n.HandleChineseChars != nil && !*n.HandleChineseChars) {
+			return &ErrUnsupportedTokenizer{Reason: "BERT clean_text and handle_chinese_chars must be enabled"}
+		}
+		cfg.DoLowerCase = true
+		cfg.StripAccents = nil
 		if n.Lowercase != nil {
 			cfg.DoLowerCase = *n.Lowercase
 		}
@@ -101,17 +111,10 @@ func applyNormalizer(n *normalizerJSON, cfg *Config) error {
 			cfg.StripAccents = &v
 		}
 		return nil
-	case "NFD", "NFKD", "NFC", "NFKC", "Lowercase", "StripAccents", "Strip":
-		// 这些单步归一化与 BertNormalizer 的组合效果接近，放行
-		if n.Type == "Lowercase" {
-			cfg.DoLowerCase = true
-		}
-		if n.Type == "StripAccents" {
-			v := true
-			cfg.StripAccents = &v
-		}
-		return nil
 	case "Sequence":
+		if len(n.Normalizers) != 1 {
+			return &ErrUnsupportedTokenizer{Reason: "normalizer Sequence must contain exactly one BertNormalizer"}
+		}
 		for _, sub := range n.Normalizers {
 			if err := applyNormalizer(sub, cfg); err != nil {
 				return err

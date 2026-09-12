@@ -130,7 +130,11 @@ func TestAddressKeptWhenMergeYieldsNothing(t *testing.T) {
 	const seed = "深圳市南山区科技南十二路8-2号科兴科学园"
 
 	start := strings.Index(text, seed)
+	if got := mergeChineseAddress(text, []types.Span{{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99}}); len(got) != 0 {
+		t.Fatalf("aifw default must discard unmerged seed: %+v", got)
+	}
 	m := New(
+		WithAddressFallback(true),
 		WithRecognizers(stubRecognizer{name: "ner", spans: []types.Span{
 			{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99},
 		}}),

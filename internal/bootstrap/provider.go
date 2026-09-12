@@ -68,8 +68,8 @@ func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) [
 // 中英文各挂一个模型，按语言分流。模型 id 同时也是它在模型根目录下的相对路径。
 // 默认模型。标签集须是 PER / ORG / LOC 这一套，否则 labelToEntityType 认不出来。
 const (
-	DefaultENModelID = "Xenova/bert-base-NER"
-	DefaultZHModelID = "Xenova/bert-base-multilingual-cased-ner-hrl"
+	DefaultENModelID = "funstory-ai/neurobert-mini"
+	DefaultZHModelID = "ckiplab/bert-tiny-chinese-ner"
 )
 
 // nerModelsFor 决定启用哪些模型、各自负责哪种语言。
@@ -143,6 +143,7 @@ func ProvideMasker(rs []usecase.Recognizer, d usecase.LangDetector, c usecase.Co
 		masker.WithRecognizers(rs...),
 		masker.WithLangDetector(d),
 		masker.WithConfigStore(c),
+		masker.WithAddressFallback(cfg.AddressFallback),
 	)
 }
 
@@ -189,15 +190,19 @@ func requestAPIKeyFactory(app *App, dir string) func(string) (*proxy.Proxy, erro
 	if dir == "" {
 		return nil
 	}
+	root, openErr := os.OpenRoot(dir)
 	return func(path string) (*proxy.Proxy, error) {
-		resolved, err := pathsafe.Within(dir, path)
+		if openErr != nil {
+			return nil, openErr
+		}
+		data, err := pathsafe.ReadFile(root, path)
 		if err != nil {
 			return nil, err
 		}
-		client, err := llmrepo.NewFromFile(resolved)
+		key, err := llmrepo.ParseAPIKeyFile(data)
 		if err != nil {
 			return nil, err
 		}
-		return proxy.New(app.Masker, app.Restorer, client), nil
+		return proxy.New(app.Masker, app.Restorer, llmrepo.New(key)), nil
 	}
 }

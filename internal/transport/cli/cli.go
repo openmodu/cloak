@@ -83,10 +83,11 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	app, err := bootstrap.InitApp(bootstrap.Config{
-		ModelsDir:  confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
-		ENModelID:  confrepo.Resolve("", confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
-		ZHModelID:  confrepo.Resolve("", confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
-		MaskConfig: fileCfg.MaskConfig,
+		ModelsDir:       confrepo.ResolvePath(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		ENModelID:       confrepo.Resolve("", confrepo.EnvNames("EN_MODEL_ID"), fileCfg.ENModelID, ""),
+		ZHModelID:       confrepo.Resolve("", confrepo.EnvNames("ZH_MODEL_ID"), fileCfg.ZHModelID, ""),
+		MaskConfig:      fileCfg.MaskConfig,
+		AddressFallback: fileCfg.AddressFallback,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "初始化失败:", err)

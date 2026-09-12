@@ -23,7 +23,7 @@ const (
 var hantOnly = map[rune]struct{}{}
 
 func init() {
-	const chars = "個們這裡與從對開關會學點國時間長車馬鳥魚門東風雲龍區縣灣臺鄉鎮號樓層裝業產經濟財務資訊網絡電腦軟體讀寫發現實際壹貳參肆陸萬億謝請問題應該樣單雙歲圖書館銀行證券來為說話語職員專業術語機構織構師傳統計劃備聽視覺醫療藥廠標準則規範圍繞認識別記憶體檔案夾複製貼稱號碼誌總經理營運輸送達郵遞區號憑據驗證錯誤"
+	const chars = "個們這裡與從對開關會學點國時長車馬鳥魚門東風雲龍區縣灣臺鄉鎮號樓層裝業產經濟財務資訊網絡電腦軟體讀寫發現實際貳參陸萬億謝請問題應該樣單雙歲圖書館銀證來為說話語職員專術機構織師傳統計劃備聽視覺醫療藥廠標準則規範圍繞認識別記憶檔夾複製貼稱碼誌總營運輸達郵遞憑據驗錯誤"
 	for _, r := range chars {
 		hantOnly[r] = struct{}{}
 	}
@@ -52,11 +52,13 @@ func DetectScript(text string) Script {
 		}
 	}
 
-	// 假名与谚文只在日文、韩文里出现，见到就可以定性。
-	if kana > 0 {
+	// Require a meaningful proportion: an isolated annotation must not reroute
+	// a Chinese document away from Chinese NER and address processing.
+	total := han + kana + hangul + latin
+	if kana > 0 && kana*4 >= total {
 		return ScriptJapanese
 	}
-	if hangul > 0 {
+	if hangul > 0 && hangul*4 >= total {
 		return ScriptKorean
 	}
 

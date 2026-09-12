@@ -281,11 +281,14 @@ CGO_ENABLED=1 go build -tags cloak_onnx -o bin/cloakd ./cmd/cloakd
 
 export CLOAK_ONNXRUNTIME_LIB=~/.cloak/lib/libonnxruntime.so
 export CLOAK_MODELS_DIR=~/.cloak/models
+export CLOAK_EN_MODEL_ID=Xenova/bert-base-NER
+export CLOAK_ZH_MODEL_ID=Xenova/bert-base-multilingual-cased-ner-hrl
 ./bin/cloakd
 ```
 
-默认模型是 `Xenova/bert-base-NER`（英文）和
-`Xenova/bert-base-multilingual-cased-ner-hrl`（中文），可以用 `--en-model` /
+运行时默认模型与 aifw 一致：`funstory-ai/neurobert-mini`（英文）和
+`ckiplab/bert-tiny-chinese-ner`（中文）。安装脚本选择有现成 ONNX 导出的 Xenova 模型，
+须使用脚本输出的模型 ID 环境变量（如上），这不代表两套模型结果相同。可以用 `--en-model` /
 `--zh-model`、`CLOAK_EN_MODEL_ID` / `CLOAK_ZH_MODEL_ID` 或配置文件换掉。
 换模型时注意标签集须是 `PER` / `ORG` / `LOC` 这一套，否则 `labelToEntityType`
 认不出来。
@@ -305,6 +308,8 @@ export CLOAK_MODELS_DIR=~/.cloak/models
 
 ```bash
 CLOAK_TEST_MODELS_DIR=~/.cloak/models \
+CLOAK_TEST_EN_MODEL=Xenova/bert-base-NER \
+CLOAK_TEST_ZH_MODEL=Xenova/bert-base-multilingual-cased-ner-hrl \
 CLOAK_ONNXRUNTIME_LIB=~/.cloak/lib/libonnxruntime.so make test-onnx
 ```
 

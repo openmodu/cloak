@@ -6,7 +6,7 @@
 #   CLOAK_HOME=/opt/cloak scripts/setup-ner.sh
 #   HF_ENDPOINT=https://hf-mirror.com scripts/setup-ner.sh    # 走镜像
 #
-# 可重复执行：已经存在且大小正确的文件会跳过，中断的下载会续传。
+# 可重复执行：通过完整性校验的文件才跳过；中断的下载会重新下载。
 
 set -euo pipefail
 
@@ -14,6 +14,8 @@ CLOAK_HOME="${CLOAK_HOME:-$HOME/.cloak}"
 HF_ENDPOINT="${HF_ENDPOINT:-https://huggingface.co}"
 ORT_VERSION="${ORT_VERSION:-1.30.0}"
 
+# These repositories provide ready-to-use ONNX exports. Runtime defaults remain
+# the original aifw model IDs; export the selected IDs below when launching.
 EN_MODEL="${CLOAK_EN_MODEL_ID:-Xenova/bert-base-NER}"
 ZH_MODEL="${CLOAK_ZH_MODEL_ID:-Xenova/bert-base-multilingual-cased-ner-hrl}"
 
@@ -22,16 +24,7 @@ LIB_DIR="$CLOAK_HOME/lib"
 
 log() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 
-fetch() { # fetch <url> <目标路径>
-  local url="$1" dest="$2"
-  if [[ -s "$dest" ]]; then
-    echo "    已存在，跳过 $(basename "$dest")"
-    return
-  fi
-  mkdir -p "$(dirname "$dest")"
-  curl -fL --retry 10 --retry-all-errors --retry-delay 2 -C - \
-    --progress-bar -o "$dest" "$url"
-}
+source "$(dirname "${BASH_SOURCE[0]}")/download.sh"
 
 log "安装目录：$CLOAK_HOME"
 
@@ -52,7 +45,7 @@ fi
 for model in "$EN_MODEL" "$ZH_MODEL"; do
   log "下载模型 $model"
   dest="$MODELS_DIR/$model"
-  for f in config.json vocab.txt tokenizer_config.json; do
+  for f in config.json vocab.txt tokenizer_config.json tokenizer.json; do
     fetch "$HF_ENDPOINT/$model/resolve/main/$f" "$dest/$f"
   done
   fetch "$HF_ENDPOINT/$model/resolve/main/onnx/model_quantized.onnx" "$dest/onnx/model_quantized.onnx"
@@ -71,6 +64,8 @@ $(log "完成")
 
     export CLOAK_ONNXRUNTIME_LIB=$LIB_DIR/libonnxruntime.so
     export CLOAK_MODELS_DIR=$MODELS_DIR
+    export CLOAK_EN_MODEL_ID=$EN_MODEL
+    export CLOAK_ZH_MODEL_ID=$ZH_MODEL
     ./bin/cloakd
 
 两个模型的标签集须是 PER / ORG / LOC 这一套，换模型时一并确认。

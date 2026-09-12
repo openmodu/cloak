@@ -62,6 +62,23 @@ func TestRealONNX(t *testing.T) {
 				}
 				t.Logf("%s %d:%d %q %.4f", s.Type, s.Start, s.End, s.Text(tc.text), s.Score)
 			}
+			expected := []string{"John Smith", "Microsoft", "New York"}
+			expectedTypes := []types.EntityType{types.EntityUserName, types.EntityOrganization, types.EntityPhysicalAddress}
+			if tc.lang.IsChinese() {
+				expected = []string{"王小明", "北京市朝阳区建国路88号"}
+				expectedTypes = []types.EntityType{types.EntityUserName, types.EntityPhysicalAddress}
+			}
+			for i, want := range expected {
+				found := false
+				for _, s := range spans {
+					if s.Text(tc.text) == want && s.Type == expectedTypes[i] {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("missing expected entity %q", want)
+				}
+			}
 		})
 	}
 }

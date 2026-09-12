@@ -4,6 +4,7 @@ package pathsafe
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,38 @@ import (
 // ErrOutsideBase 表示路径逃出了基准目录。
 var ErrOutsideBase = errors.New("path escapes base directory")
 
+// ReadFile opens relative to a pinned directory handle. os.Root enforces
+// containment during resolution, even if another process swaps a symlink.
+func ReadFile(root *os.Root, rel string) ([]byte, error) {
+	if !filepath.IsLocal(rel) || strings.ContainsRune(rel, ':') {
+		return nil, ErrOutsideBase
+	}
+	f, err := root.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("key file must be regular")
+	}
+	const maxSize = 1 << 20
+	b, err := io.ReadAll(io.LimitReader(f, maxSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxSize {
+		return nil, errors.New("key file too large")
+	}
+	return b, nil
+}
+
 // Within 把 rel 解析成 base 之内的绝对路径。
+// Deprecated: this is only a path inspection helper, not a security boundary.
+// For untrusted filesystem access use ReadFile with os.OpenRoot instead.
 //
 // rel 来自请求，必须当成敌意输入：绝对路径直接拒绝，`..` 逃逸直接拒绝，
 // 符号链接也要解析之后再判断——否则 base 里放一个指向 /etc 的链接就能绕过检查。

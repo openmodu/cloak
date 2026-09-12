@@ -55,12 +55,18 @@ func TestNormalizerOverridesConfig(t *testing.T) {
 // 关键：实现范围之外的流水线必须明确失败，而不是静默算错。
 func TestLoadRejectsUnsupportedPipelines(t *testing.T) {
 	for name, doc := range map[string]string{
-		"BPE 模型":           `{"model":{"type":"BPE"}}`,
-		"Unigram 模型":       `{"model":{"type":"Unigram"}}`,
-		"ByteLevel 预分词":    `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"ByteLevel"}}`,
-		"Metaspace 预分词":    `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"Metaspace"}}`,
-		"Precompiled 归一化":  `{"model":{"type":"WordPiece"},"normalizer":{"type":"Precompiled"}}`,
-		"Sequence 里藏着不支持的": `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"Sequence","pretokenizers":[{"type":"BertPreTokenizer"},{"type":"ByteLevel"}]}}`,
+		"NFKC":                       `{"normalizer":{"type":"NFKC"}}`,
+		"WhitespaceSplit":            `{"pre_tokenizer":{"type":"WhitespaceSplit"}}`,
+		"Whitespace":                 `{"pre_tokenizer":{"type":"Whitespace"}}`,
+		"Punctuation":                `{"pre_tokenizer":{"type":"Punctuation"}}`,
+		"disabled cleaning":          `{"normalizer":{"type":"BertNormalizer","clean_text":false}}`,
+		"disabled Chinese splitting": `{"normalizer":{"type":"BertNormalizer","handle_chinese_chars":false}}`,
+		"BPE 模型":                     `{"model":{"type":"BPE"}}`,
+		"Unigram 模型":                 `{"model":{"type":"Unigram"}}`,
+		"ByteLevel 预分词":              `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"ByteLevel"}}`,
+		"Metaspace 预分词":              `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"Metaspace"}}`,
+		"Precompiled 归一化":            `{"model":{"type":"WordPiece"},"normalizer":{"type":"Precompiled"}}`,
+		"Sequence 里藏着不支持的":           `{"model":{"type":"WordPiece"},"pre_tokenizer":{"type":"Sequence","pretokenizers":[{"type":"BertPreTokenizer"},{"type":"ByteLevel"}]}}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Load(modelDir(t, doc))
@@ -75,5 +81,18 @@ func TestLoadRejectsUnsupportedPipelines(t *testing.T) {
 func TestLoadRejectsBrokenTokenizerJSON(t *testing.T) {
 	if _, err := Load(modelDir(t, `{not json`)); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestRejectUnsupportedLegacyConfig(t *testing.T) {
+	for _, doc := range []string{`{"do_basic_tokenize":false}`, `{"tokenize_chinese_chars":false}`, `{"never_split":["hello-world"]}`} {
+		dir := modelDir(t, "")
+		if err := os.WriteFile(filepath.Join(dir, "tokenizer_config.json"), []byte(doc), 0600); err != nil {
+			t.Fatal(err)
+		}
+		var unsupported *ErrUnsupportedTokenizer
+		if _, err := Load(dir); !errors.As(err, &unsupported) {
+			t.Fatalf("accepted %s: %v", doc, err)
+		}
 	}
 }
