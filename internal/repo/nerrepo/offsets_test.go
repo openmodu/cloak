@@ -22,7 +22,7 @@ func eq(t *testing.T, got, want []string) {
 	}
 }
 
-// 上游不用分词器的 offset mapping，而是拿 token 串回原文按游标查找。
+// 偏移不取自分词器，而是拿 token 串回原文按游标查找。
 func TestComputeOffsetsBasic(t *testing.T) {
 	text := "Acme Corporation is here"
 	tokens := []string{"acme", "corp", "oration", "is"}

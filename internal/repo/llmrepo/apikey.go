@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// APIKeyFile 是上游约定的 LLM 配置文件格式（见 aifw README）：
+// APIKeyFile 是 LLM 配置文件的格式：
 //
 //	{
 //	  "openai-api-key": "xxxx",

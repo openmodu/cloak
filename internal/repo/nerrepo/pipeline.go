@@ -8,7 +8,7 @@ import (
 	"github.com/openmodu/cloak/pkg/tokenize"
 )
 
-// item 是 token 级别的分类结果，对应上游 libner.py 的 NerItem。
+// item 是 token 级别的分类结果。
 type item struct {
 	entity string
 	score  float32
@@ -18,8 +18,7 @@ type item struct {
 	end    int
 }
 
-// classify 把模型输出的 logits 转成 token 级结果，逐段对应上游
-// TokenClassificationPipelinePy.run：
+// classify 把模型输出的 logits 转成 token 级结果：
 // 取 argmax 与 softmax 分数 → 跳过 O 与特殊 token → 用 token 串回原文定位 →
 // 合并相邻的同类片段。
 func classify(enc tokenize.Encoding, logits [][]float32, id2label map[int]string, opts runOptions) []item {
@@ -139,8 +138,7 @@ func mergeContiguous(raw []item) []item {
 	return out
 }
 
-// toNERTokens 把 token 级结果翻译成核心层要的结构。
-// 上游在绑定层还要做一次「码点偏移 → 字节偏移」的换算，Go 全程按字节走，这一步不存在。
+// toNERTokens 把 token 级结果翻译成聚合阶段要的结构。偏移全程按字节走。
 func toNERTokens(items []item) []types.NERToken {
 	out := make([]types.NERToken, 0, len(items))
 	for _, it := range items {

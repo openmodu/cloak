@@ -19,10 +19,10 @@ func read(t *testing.T, name string) string {
 	return string(b)
 }
 
-// 金样本直接取自上游 aifw 仓库的 tests/*.anonymized.expected.txt。
-// 这两份样本里的人名、公司名、中文地址都没有被脱敏，说明产出时 NER 未参与，
-// 正好是纯正则路径的预期输出——因此可以用来逐字节验证 Go 版与上游的一致性。
-func TestMaskMatchesUpstreamGolden(t *testing.T) {
+// 金样本覆盖中英文两类文本里的全部实体类型，是纯正则路径（未接 NER）的期望输出。
+// 人名、公司名、中文地址没有被脱敏是预期的——它们需要 NER 才能识别。
+// 任何改动让输出偏离一个字节，这个测试就会失败。
+func TestMaskMatchesGolden(t *testing.T) {
 	cases := []struct {
 		in    string
 		want  string
@@ -42,7 +42,7 @@ func TestMaskMatchesUpstreamGolden(t *testing.T) {
 				t.Fatal(err)
 			}
 			if want := read(t, c.want); got != want {
-				t.Fatalf("脱敏结果与上游金样本不一致\n--- got ---\n%s\n--- want ---\n%s", got, want)
+				t.Fatalf("脱敏结果与金样本不一致\n--- got ---\n%s\n--- want ---\n%s", got, want)
 			}
 			if len(meta.Items) != c.items {
 				t.Fatalf("want %d masked items, got %d", c.items, len(meta.Items))

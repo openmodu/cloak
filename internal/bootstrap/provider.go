@@ -50,9 +50,9 @@ var ProviderSet = wire.NewSet(
 
 // ProvideRecognizers 决定启用哪些识别器以及它们的顺序。
 //
-// 上游按实体类型枚举顺序建出一整组正则识别器，再把 NER 的结果接在它们后面；
-// 这个顺序影响同分同范围区间的取舍，不要随意调整。
-// 接入 NER 后在这里追加一个实现即可，masker 不需要任何改动。
+// 正则识别器按实体类型枚举顺序排在前，NER 的结果接在它们后面；
+// 这个顺序影响完全同分同范围区间的取舍，不要随意调整。
+// 要再加一种识别方式，在这里追加一个实现即可，masker 不需要任何改动。
 func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) []usecase.Recognizer {
 	out := make([]usecase.Recognizer, 0, len(rx)+len(ner))
 	for _, r := range rx {
@@ -64,7 +64,7 @@ func ProvideRecognizers(rx []*regexrepo.Recognizer, ner []*nerrepo.Recognizer) [
 	return out
 }
 
-// 上游按语言在中英两个模型之间二选一，模型 id 与目录布局见 aifw 的 copy-assets 脚本。
+// 中英文各挂一个模型，按语言分流。模型 id 同时也是它在模型根目录下的相对路径。
 var nerModels = []struct {
 	id      string
 	forLang func(types.Language) bool
@@ -73,11 +73,11 @@ var nerModels = []struct {
 	{"ckiplab/bert-tiny-chinese-ner", func(l types.Language) bool { return l.IsChinese() }},
 }
 
-// ProvideNERRecognizers 按上游的目录约定加载模型：
+// ProvideNERRecognizers 按约定的目录布局加载模型：
 // <ModelsDir>/<model-id>/onnx/model_quantized.onnx 及同目录的 config.json、vocab。
 //
-// 任何一步不成立都只打一条警告并退化成纯正则，而不是让整个服务起不来——
-// 上游在模型缺失时也是这么做的。
+// 任何一步不成立都只打一条警告并退化成纯正则，而不是让整个服务起不来：
+// 少一类识别能力，远好过整个脱敏网关不可用。
 func ProvideNERRecognizers(cfg Config) ([]*nerrepo.Recognizer, error) {
 	if cfg.ModelsDir == "" {
 		return nil, nil

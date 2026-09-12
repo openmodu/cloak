@@ -7,7 +7,7 @@ import (
 	"github.com/openmodu/cloak/internal/types"
 )
 
-// PatternSpec 是一条正则规则的声明，对应上游 RegexRecognizer.PatternSpec。
+// PatternSpec 是一条正则规则的声明。
 // 规则本身不带实体类型——类型由持有它的 Recognizer 决定。
 //
 // GroupIndex 为 0 时取整个匹配，大于 0 时只取该捕获组：用于「password: <值>」
@@ -19,7 +19,7 @@ type PatternSpec struct {
 	GroupIndex int
 }
 
-// ValidateFunc 对应上游的 ValidateResultFn（返回 ?f32）。
+// ValidateFunc 是匹配命中后的二次校验。
 // 正则往往只是初筛，钱包地址、卡号这类还需要校验位检查才能定分数。
 // 返回 ok=false 表示不作判断，沿用规则自带的分数；它只调整分数，不否决匹配——
 // 要让一个匹配落选，返回一个低于采纳阈值的分数即可。
@@ -52,12 +52,11 @@ func compile(spec PatternSpec) (compiledPattern, error) {
 	return compiledPattern{spec: spec, re: re, group: group}, nil
 }
 
-// find 复刻上游的扫描循环：从 pos 起在**剩余文本**上找下一个匹配，取指定捕获组，
-// 然后把 pos 推到该组的结尾。
+// find 从 pos 起在**剩余文本**上找下一个匹配，取指定捕获组，然后把 pos 推到该组的结尾。
 //
-// 注意这里刻意对 text[pos:] 切片搜索，而不是用 FindAll 一次拿全部匹配：上游
-// 传给 Rust 的也是 &hay[start..]，这会让 \b 之类的锚点在切点处重新判定边界，
-// 换成 FindAll 语义就不一样了。
+// 这里刻意对 text[pos:] 切片搜索，而不是用 FindAll 一次拿全部匹配。
+// 两者语义不同：切片搜索会让 \b 这类锚点在切点处按「串首」重新判定边界，
+// 而捕获组只前进到组尾，下一轮仍能匹配到被 FindAll 跳过的重叠区间。
 func (p compiledPattern) find(text string, entityType types.EntityType, validate ValidateFunc) []types.Span {
 	var out []types.Span
 	g := 2 * p.group
@@ -67,7 +66,7 @@ func (p compiledPattern) find(text string, entityType types.EntityType, validate
 			break // 没有更多匹配
 		}
 		if g+1 >= len(loc) || loc[g] < 0 {
-			break // 要取的捕获组未参与匹配，与上游 rc==0 的处理一致
+			break // 要取的捕获组没参与匹配，这条规则到此为止
 		}
 		s, e := pos+loc[g], pos+loc[g+1]
 

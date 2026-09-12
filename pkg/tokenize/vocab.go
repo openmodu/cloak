@@ -1,9 +1,8 @@
 // Package tokenize 提供 BERT 系模型的 WordPiece 分词，与业务无关。
 //
-// 上游用 Python 的 transformers AutoTokenizer / JS 的 Transformers.js。
-// 注意上游并不使用分词器返回的 offset mapping，而是拿 token 字符串回原文里
-// 重新定位（见 internal/repo/nerrepo/offsets.go），所以这里只需要保证
-// **token 串与 id 正确**，偏移不由本包负责。
+// 本包只负责产出**正确的 token 串与 id**，不负责偏移：
+// token 在原文中的位置由 internal/repo/nerrepo/offsets.go 拿 token 串回原文重新定位。
+// 这样分词器换实现时，偏移逻辑不受影响。
 package tokenize
 
 import (

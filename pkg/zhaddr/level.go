@@ -2,7 +2,7 @@ package zhaddr
 
 import "math/bits"
 
-// AddrLevel 是地址的层级，数字越小越细。与上游 AddrLevel 枚举一一对应。
+// AddrLevel 是地址的层级，数字越小越细。
 type AddrLevel uint8
 
 const (
@@ -41,8 +41,7 @@ func (l AddrLevel) String() string {
 	return "unknown"
 }
 
-// 各层级在位图里占一位，起始偏移 8——与上游的 LEVEL_BIT_OFFSET 保持一致，
-// 低 8 位留给上游将来可能加的其它标志。
+// 各层级在位图里占一位，从第 8 位起排。低 8 位留给将来可能加的其它标志。
 const levelBitOffset = 8
 
 const levelBitsLen = int(L11CountryRegion) - int(L1UnitRoom) + 1

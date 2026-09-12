@@ -39,8 +39,9 @@ func TestRestoreHandlesReorder(t *testing.T) {
 	}
 }
 
-// 上游按凭据逐条查找占位符的第一次出现，因此同一个占位符重复出现时只还原第一处。
-// 这是复刻的行为，不是笔误。
+// 还原按凭据逐条查找占位符的第一次出现，因此同一个占位符重复出现时只还原第一处。
+// 这是刻意的：凭据里一个编号只对应原文里的一个区间，重复出现多半是模型自己复制的，
+// 全部替换反而会把模型的复述也改掉。
 func TestRestoreOnlyFirstOccurrence(t *testing.T) {
 	in := "mail __PII_EMAIL_ADDRESS_1__ (again __PII_EMAIL_ADDRESS_1__)"
 	got, err := New().Restore(context.Background(), in, meta())

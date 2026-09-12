@@ -16,10 +16,8 @@ const (
 	goldenPath  = "../../testdata/zh_address.golden.txt"
 )
 
-// Dump 把数据集每一行按「整行作为种子」跑一遍融合，输出固定格式。
-//
-// 这个格式与 scripts/crosscheck-zhaddr.sh 里那个 Zig 程序的输出完全一致，
-// 因此金样本可以直接与上游 core/merge_zh_addr.zig 的实际输出对拍。
+// dumpDataset 把数据集每一行按「整行作为种子」跑一遍融合，输出固定格式。
+// 规则一改，金样本里的分数、偏移或文本就会变，diff 一眼看得出改动影响了哪几条。
 func dumpDataset(t *testing.T) string {
 	t.Helper()
 	f, err := os.Open(datasetPath)

@@ -15,9 +15,10 @@ func TestDefaultMaskConfigMatchesUpstream(t *testing.T) {
 			t.Fatalf("%s 默认应当脱敏", typ)
 		}
 	}
-	// 位序与上游 aifw 的 ENABLE_MASK_*_BIT 对齐：地址是第 0 位，邮箱第 1 位
+	// 位序跟 EntityType 的枚举顺序绑定：地址第 0 位，邮箱第 1 位。
+	// 位序变了会让序列化出去的配置在旧版本上解析成别的开关。
 	if bitOf(EntityPhysicalAddress) != 1<<0 || bitOf(EntityEmailAddress) != 1<<1 {
-		t.Fatal("位序与上游不一致")
+		t.Fatal("位序被改动了")
 	}
 }
 

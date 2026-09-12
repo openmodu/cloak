@@ -1,5 +1,5 @@
 // Command fakellm 是一个假的 OpenAI 兼容端点，用来在不花真 API key 的前提下
-// 验证 /api/call 这条链路。上游也带了一个同样用途的 fake_llm。
+// 验证 /api/call 这条链路。
 //
 // 它做两件事：
 //  1. 把收到的 prompt 原样打到标准错误——这就是真正离开本机的内容，

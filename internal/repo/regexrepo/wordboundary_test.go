@@ -7,8 +7,8 @@ import (
 	"github.com/openmodu/cloak/internal/types"
 )
 
-// 上游用的 Rust regex-automata 把汉字当词字符，「A座1208室」里的 1208 两侧都不成
-// 词边界，因此不该被 \b\d{4,8}\b 命中。Go 的 \b 只认 ASCII，若不做翻译就会误判。
+// 按 Unicode 判定，汉字算词字符，「A座1208室」里的 1208 两侧都不成词边界，
+// 因此不该被 \b\d{4,8}\b 命中。Go 的 \b 只认 ASCII，不做翻译就会误判成验证码。
 func TestUnicodeWordBoundary(t *testing.T) {
 	r, err := New(types.EntityVerificationCode, nil, nil)
 	if err != nil {

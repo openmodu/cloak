@@ -10,11 +10,11 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// 本文件是 libs/aifw-py/libner.py 里那套 offset 还原逻辑的移植。
+// 本文件负责把 token 重新定位回原文。
 //
-// 上游刻意不用分词器返回的 offset mapping，而是拿 token 字符串回原文里按游标查找，
-// 查不到再退回「去掉重音与连接符」后再查。移植时保留了这套做法，因为脱敏的切分
-// 位置完全由它决定，换成 offset mapping 两边结果就会分叉。
+// 这里刻意不用分词器返回的 offset mapping，而是拿 token 字符串回原文里按游标查找，
+// 查不到再退回「去掉重音与连接符」后再查。原因是分词器的 offset 行为各家不一致，
+// 而脱敏的切分位置完全由它决定——自己算一遍，换分词器时结果才稳定。
 //
 // 一处必要的调整：Python 那边按码点索引计算，最后再转成字节偏移；Go 的字符串本身
 // 就是字节序列，这里全程按字节走，并且把大小写转换的索引映射显式建出来——
@@ -50,8 +50,9 @@ func stripAccents(s string) string {
 	return out
 }
 
-// connectorPunct 是上游 is_connector_punct 的同一组字符：
-// 各种连字符、撇号、间隔点。人名里常见，去掉后更容易和 token 对上。
+// isConnectorPunct 匹配各种连字符、撇号、间隔点。
+// 这些字符在人名里常见（O'Brien、让-皮埃尔），分词器往往会吃掉它们，
+// 去掉之后更容易和 token 对上。
 func isConnectorPunct(r rune) bool {
 	switch r {
 	case '-', '\'', '`', '−', '·', '・', '⁃', '∙':
@@ -90,7 +91,8 @@ func findStrippedIndexAtOrAfter(mapping []int, origIndex int) int {
 }
 
 // computeOffsetsFromTokens 把 token 序列逐个定位回文本，返回每个 token 的字节区间。
-// 定位不到的 token 退化成零宽区间，停在当前游标处——与上游一致。
+// 定位不到的 token 退化成零宽区间，停在当前游标处：宁可少标一个，
+// 也不能让后续 token 的偏移整体错位。
 func computeOffsetsFromTokens(text string, tokens []string) [][2]int {
 	offsets := make([][2]int, len(tokens))
 	lowerText, lowerToOrig := lowerWithMap(text)
@@ -137,7 +139,8 @@ func computeOffsetsFromTokens(text string, tokens []string) [][2]int {
 	return offsets
 }
 
-// indexFrom 先从游标处找，找不到再从头找一遍——上游同样会回头找。
+// indexFrom 先从游标处找，找不到再从头找一遍。
+// 回头找是为了容忍分词器与原文顺序不完全一致的情况。
 func indexFrom(hay, needle string, from int) int {
 	if from < 0 {
 		from = 0

@@ -1,4 +1,4 @@
-// Command cloak 是 OneAIFW Go 版的命令行入口。
+// Command cloak 是 cloak 的命令行入口。
 package main
 
 import (

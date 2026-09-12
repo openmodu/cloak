@@ -1,6 +1,6 @@
 # cloak
 
-发给大模型之前脱敏，拿回结果之后还原。Go 实现，复刻自 [aifw](https://github.com/funstory-ai/aifw)（Zig + Rust 核心）。
+发给大模型之前脱敏，拿回结果之后还原。
 
 ```
 原文 ──mask──> __PII_EMAIL_ADDRESS_1__ ──> LLM
@@ -8,8 +8,21 @@
 原文 <──restore── 带占位符的回复 <───────────┘
 ```
 
-保护 12 类敏感实体：物理地址、邮箱、机构名、人名、电话、银行卡号、支付信息、
-验证码、密码、随机种子、私钥、URL。
+敏感内容永远不离开本机：替换成占位符再发出去，模型回复里的占位符再按凭据换回原文。
+凭据只存位置，不复制内容。
+
+## 保护范围
+
+12 类敏感实体：
+
+| 类别 | 实体 |
+|---|---|
+| 身份 | 人名、机构名、物理地址 |
+| 联系方式 | 邮箱、电话、URL |
+| 金融 | 银行卡号、支付信息 |
+| 凭证 | 密码、验证码、私钥、随机种子 |
+
+物理地址默认**不**脱敏（误伤正常语句的概率高，需要显式打开），其余默认全开。
 
 ## 快速开始
 
@@ -26,8 +39,27 @@ make build
 curl -s localhost:8844/api/health
 ```
 
-默认构建是**纯 Go、零系统依赖**：识别只用正则。要启用 NER（人名、机构名、中文地址）
-见下面「启用 NER」。
+默认构建是**纯 Go、零系统依赖**，识别只用正则：邮箱、电话、卡号、密码、验证码、
+私钥、URL 这些有固定形状的能认出来，人名、机构名、中文完整地址认不出来。
+后者需要模型，见「启用 NER」。
+
+## HTTP 接口
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/health` | 健康检查，免鉴权 |
+| POST | `/api/call` | 完整链路：脱敏 → 调模型 → 还原 |
+| POST | `/api/mask_text` | 脱敏，返回脱敏文本与还原凭据 |
+| POST | `/api/restore_text` | 凭还原凭据把占位符换回原文 |
+| POST | `/api/mask_text_batch` | 批量脱敏 |
+| POST | `/api/restore_text_batch` | 批量还原 |
+| POST | `/api/config` | 免重启修改脱敏开关 |
+
+响应统一是 `{"output": ..., "error": ...}` 信封。`Authorization` 头支持裸 key
+与 `Bearer <key>` 两种写法，不配置访问口令时不校验。
+
+还原凭据（`maskMeta`）**服务端不留存**，随响应交给调用方，还原时原样带回来。
+注意它里面含有原文，要和脱敏前的文本同等看待——不要写进日志，不要转给第三方。
 
 ## 工程约定
 
@@ -42,56 +74,64 @@ curl -s localhost:8844/api/health
 | `pkg/` | 与业务无关的基础模块，可被外部直接引用 |
 
 依赖方向只有一条：`transport → usecase ← repo`，`usecase → pkg`。
-**usecase 永不 import repo**，只认 `internal/usecase/port.go` 里的 5 个接口
-（`Recognizer` / `LangDetector` / `ConfigStore` / `LLMClient`）。
+
+**usecase 永不 import repo**，只认 `internal/usecase/port.go` 里的 4 个接口：
+
+```go
+type Recognizer interface { ... }   // 正则、本地 NER、远程 NER 服务都是它的实现
+type LangDetector interface { ... } // 语言判定，决定是否启用中文地址规则
+type ConfigStore interface { ... }  // 可热更新的脱敏开关
+type LLMClient interface { ... }    // 下游大模型
+```
+
 `internal/usecase/masker/masker_test.go` 全程用 stub 识别器，一行 repo 都不碰——
-这条约束是被测试实际验证着的。
+这条约束是被测试实际验证着的（见「怎么测试」第 6 条）。
 
-改了 `ProviderSet` 之后跑 `make wire` 重新生成 `internal/bootstrap/wire_gen.go`。
+改了 `internal/bootstrap/provider.go` 里的 `ProviderSet` 之后：
 
-## 复刻原则
+```bash
+make wire     # 重新生成 internal/bootstrap/wire_gen.go
+```
 
-**行为以上游为准。** 遇到上游做法看起来可以改进的地方，照抄上游，把理由写进注释，
-不擅自"优化"。已按此原则对齐的地方：
+## 识别流程
 
-| 点 | 上游做法 | 出处 |
-|---|---|---|
-| 识别器组织 | 一个 EntityType 一个 RegexRecognizer，按枚举顺序建出一整组 | `aifw_core.zig:793` |
-| 正则扫描 | 从 pos 起在**剩余文本切片**上找下一个匹配，取捕获组后把 pos 推到组尾 | `RegexRecognizer.zig:run` |
-| 二次校验 | `ValidateResultFn` 返回 `?f32`，`orelse` 默认分——只调分数，从不否决匹配 | `RegexRecognizer.zig:run` |
-| 词边界 | Rust regex-automata 开了 unicode feature，`\b` 是 **Unicode** 词边界 | `libs/regex/Cargo.toml` |
-| 还原 | 由凭据驱动：逐条重新生成占位符，找它**第一次出现**的位置，排序后重建 | `aifw_core.zig:693` |
-| 还原凭据 | 服务端不留存，随响应回传给调用方，还原时带回来 | `libaifw.py:8` |
-| 采纳阈值 | 写死 0.5 | `aifw_core.zig:MaskPipeline.run` |
-| 开关位图 | 地址第 0 位、邮箱第 1 位……默认除地址外全开 | `aifw_core.zig:262` |
-| 地址隐私阈值 | 必须有门牌号(L5)，或 POI(L4) + 楼层/房间(L2/L1) | `merge_zh_addr.zig:1058` |
-| 模型缺失 | 打一条 warning 退化成纯正则，不让服务起不来 | `libner.py:build_ner_pipeline` |
+```
+文本
+ ├─ 正则识别器     每个实体类型一组规则，独立扫全文
+ └─ NER 识别器     模型逐字打 BIO 标签，聚合成实体区间（可选）
+        ↓
+   中文地址融合     仅中文：把 NER 切碎的地址片段按层级链重新粘成完整地址
+        ↓
+   区间规整         按分数过滤(≥0.5) → 同范围去重 → 重叠消解(分数高>跨度长>起点早)
+        ↓
+   占位符替换       __PII_<TYPE>_<序号>__，同时记下位置
+```
 
-由此保留的上游行为（是复刻，不是笔误）：
+中文地址融合按「国家 → 省 → 市 → 区县 → 乡镇 → 道路 → 门牌号 → POI → 楼栋 →
+楼层 → 房间」11 级层级链工作，只有细到门牌号，或同时有 POI 与楼层/房间，才算
+能定位到具体住户的敏感地址——只到「上海市浦东新区」这种粒度不脱敏。
 
-- 同一个占位符在回复里重复出现时，**只还原第一处**。
-- `Masker.Spans` 走的是完整脱敏流程，因此**受脱敏开关影响**——被关掉的类型不出现在结果里。
-- `\b\d{4,8}\b` 在「A座1208室」里不匹配 1208，因为汉字算 Unicode 词字符。
+## 配置
 
-## 与上游的模块对照
+取值优先级：**命令行 > 环境变量 > 配置文件 > 默认值**。
+环境变量前缀 `CLOAK_`，例如 `CLOAK_PORT`、`CLOAK_API_KEY_FILE`、`CLOAK_MODELS_DIR`。
+配置文件见 `configs/cloak.yaml`。
 
-| aifw | cloak |
-|---|---|
-| `libs/regex`（Rust 165 行） | **删掉**，标准库 `regexp` + 编译期词边界翻译 |
-| `core/RegexRecognizer.zig` | `internal/repo/regexrepo/` |
-| `core/NerRecognizer.zig` BIO 聚合 | `internal/repo/nerrepo/aggregate.go` |
-| `core/SpanMerger.zig` + `dedupOverlappingSpans` | `pkg/span/` |
-| `core/merge_zh_addr.zig`（1093 行） | `pkg/zhaddr/` |
-| `MaskPipeline` / `RestorePipeline` | `internal/usecase/masker` / `internal/usecase/restorer` |
-| `Session` + mask 位图 | `internal/types/maskconfig.go` + `ConfigStore` |
-| `libs/aifw-py/libner.py` | `pkg/tokenize/` + `pkg/onnxrt/` + `internal/repo/nerrepo/` |
-| `libaifw.py` 的 `detect_language` | `pkg/textutil/` + `internal/repo/langrepo/` |
-| `cli/python/aifw.py`（963 行） | `cmd/cloak` + `internal/transport/cli` |
-| `py-origin/services` | `cmd/cloakd` + `internal/transport/http` |
+LLM API key 文件格式：
 
-## 怎么验收
+```json
+{
+  "openai-api-key": "your-key",
+  "openai-base-url": "https://api.openai.com/v1",
+  "openai-model": "gpt-4o-mini"
+}
+```
 
-### 1. 一条命令过全部自动化检查
+任何 OpenAI 兼容的端点都能用，换厂商改 `openai-base-url` 即可。
+
+## 怎么测试
+
+### 1. 自动化检查
 
 ```bash
 make            # fmt + vet + test + build
@@ -103,41 +143,30 @@ make            # fmt + vet + test + build
 CGO_ENABLED=1 go vet -tags cloak_onnx ./...
 ```
 
-### 2. 逐字节对齐上游金样本（最硬的证据）
+### 2. 金样本回归
 
-`testdata/en_pii.masked.golden.txt` 与 `zh_pii.masked.golden.txt` 直接取自上游仓库的
-`tests/*.anonymized.expected.txt`。这两份样本产出时 NER 未参与（人名、公司名、中文地址
-都没被脱敏），正好是纯正则路径的预期输出。
-
-```bash
-go test ./internal/bootstrap/ -run TestMaskMatchesUpstreamGolden -v
-```
-
-想手工看：
+`testdata/` 下有中英文两份覆盖全部实体类型的样本，以及它们的期望脱敏结果。
+任何改动让输出偏离一个字节，测试就会失败：
 
 ```bash
-./bin/cloak mask -f testdata/en_pii.txt | diff - testdata/en_pii.masked.golden.txt && echo 一致
-./bin/cloak mask -f testdata/zh_pii.txt | diff - testdata/zh_pii.masked.golden.txt && echo 一致
+go test ./internal/bootstrap/ -run TestMaskMatchesGolden -v
 ```
 
-### 3. 中文地址融合与上游 Zig 实现对拍
-
-`core/merge_zh_addr.zig` 只依赖 `recog_entity.zig`，不需要 Rust 正则库，可以单独编译。
-脚本会把它编出来，用同一份数据集、同样的种子跑一遍，再和本仓库的金样本 diff：
+手工看 diff：
 
 ```bash
-make crosscheck                          # 默认找 ../aifw
-./scripts/crosscheck-zhaddr.sh /path/to/aifw
+./bin/cloak mask -f testdata/en_pii.txt | diff - testdata/en_pii.masked.golden.txt
+./bin/cloak mask -f testdata/zh_pii.txt | diff - testdata/zh_pii.masked.golden.txt
 ```
 
-需要 zig 0.15.x 在 PATH 里，或 `ZIG=/path/to/zig`
-（`mise install zig@0.15.2`，或从 https://ziglang.org/download/ 直接下）。
+中文地址融合另有一份 60 条地址的数据集与金样本：
 
-**这一项已经跑通**：`testdata/zh_address_dataset.txt` 全部 60 行，
-分数、字节偏移、文本与上游 Zig 实现逐行一致。`testdata/zh_address.golden.txt`
-因此不是"本实现的当前行为快照"，而是经上游校验过的期望输出。
+```bash
+go test ./pkg/zhaddr/                      # 比对
+go test ./pkg/zhaddr/ -update              # 规则调整后重新生成金样本
+```
 
-### 4. 往返一致性
+### 3. 往返一致性
 
 脱敏再还原必须逐字节等于原文：
 
@@ -146,36 +175,18 @@ make crosscheck                          # 默认找 ../aifw
 ./bin/cloak roundtrip -f testdata/zh_pii.txt
 ```
 
-### 5. HTTP 接口
+### 4. 拿你自己的文本试
 
 ```bash
-./bin/cloakd --port 8844 &
-
-curl -s localhost:8844/api/health
-# {"status":"ok"}
-
-curl -s -X POST localhost:8844/api/mask_text -H 'Content-Type: application/json' \
-  -d '{"text":"My email is test@example.com and my phone is 18744325579.","language":"en"}'
-# {"output":{"text":"My email is __PII_EMAIL_ADDRESS_1__ and my phone is __PII_PHONE_NUMBER_2__.","maskMeta":"..."},"error":null}
-
-# 把上一步的 maskMeta 原样带回来
-curl -s -X POST localhost:8844/api/restore_text -H 'Content-Type: application/json' \
-  -d '{"text":"<上一步的 text>","maskMeta":"<上一步的 maskMeta>"}'
-
-# 免重启改开关
-curl -s -X POST localhost:8844/api/config -H 'Content-Type: application/json' \
-  -d '{"maskConfig":{"maskEmail":false}}'
+./bin/cloak spans -f /path/to/your.txt     # 看认出了什么、有没有误伤
+echo "联系 zhang@corp.com" | ./bin/cloak mask
 ```
 
-接口清单与报文格式对齐上游 `docs/oneaifw_services_api.md`：
-`/api/health`、`/api/call`、`/api/config`、`/api/mask_text`、`/api/restore_text`、
-`/api/mask_text_batch`、`/api/restore_text_batch`。
+### 5. 用假 LLM 验证完整链路 ← 不花真 key
 
-### 6. 用假 LLM 验证完整链路 ← 不花真 key
-
-`/api/call` 是「脱敏 → 调模型 → 还原」的全链路，光看返回值看不出中间到底送出去了什么。
-`scripts/fakellm` 是个假的 OpenAI 兼容端点：它把收到的 prompt 打到终端，再原样当回复返回。
-于是你能**亲眼看到真正离开本机的内容**，同时验证还原后逐字等于原文。
+`/api/call` 光看返回值看不出中间到底送出去了什么。`scripts/fakellm` 是个假的
+OpenAI 兼容端点：它把收到的 prompt 打到终端，再原样当回复返回。于是你能
+**亲眼看到真正离开本机的内容**，同时验证还原后逐字等于原文。
 
 ```bash
 # 终端 1：假 LLM
@@ -196,7 +207,7 @@ curl -s -X POST localhost:8844/api/call -H 'Content-Type: application/json' \
   -d '{"text":"我的邮箱是 test@example.com，电话 18744325579，密码为 pwd: S3cure!Pass"}'
 ```
 
-返回（原文完整还原）：
+终端 3 拿到原文完整还原：
 
 ```json
 {"output":{"text":"我的邮箱是 test@example.com，电话 18744325579，密码为 pwd: S3cure!Pass"},"error":null}
@@ -212,7 +223,7 @@ curl -s -X POST localhost:8844/api/call -H 'Content-Type: application/json' \
 
 确认无误后把 `openai-base-url` / `openai-api-key` 换成真实的即可。
 
-### 7. 分层约束没有被破坏
+### 6. 分层约束没有被破坏
 
 ```bash
 go list -deps ./internal/usecase/... | grep 'cloak/internal/repo' && echo "违规！" || echo "usecase 没有依赖 repo"
@@ -220,8 +231,8 @@ go list -deps ./internal/usecase/... | grep 'cloak/internal/repo' && echo "违�
 
 ## 启用 NER
 
-默认只有正则，人名、机构名、中文地址不会被识别（中文地址融合需要 NER 提供种子区间）。
-启用需要两样东西：
+默认只有正则，人名、机构名不会被识别；中文地址融合需要 NER 提供种子区间，
+因此也不会生效。启用需要两样东西。
 
 **一、带 ONNX 支持编译**（需要 cgo 与 ONNX Runtime 动态库）：
 
@@ -230,7 +241,9 @@ CGO_ENABLED=1 go build -tags cloak_onnx -o bin/cloakd ./cmd/cloakd
 export CLOAK_ONNXRUNTIME_LIB=/path/to/libonnxruntime.so
 ```
 
-**二、按上游的目录布局准备模型**：
+动态库从 https://github.com/microsoft/onnxruntime/releases 下对应平台的包即可。
+
+**二、准备模型目录**，布局如下：
 
 ```
 <models-dir>/funstory-ai/neurobert-mini/config.json
@@ -239,43 +252,44 @@ export CLOAK_ONNXRUNTIME_LIB=/path/to/libonnxruntime.so
 <models-dir>/ckiplab/bert-tiny-chinese-ner/...             # 中文同上
 ```
 
-模型可以用上游 `tools/fetch_hf_models.py` 或 `tests/transformer-js/scripts/prep-models.mjs` 准备。
-然后：
+这两个是默认模型（英文 / 中文）。模型从 HuggingFace 下载；仓库里没有现成 ONNX
+的话用 `optimum-cli export onnx` 自行导出并量化。然后：
 
 ```bash
 ./bin/cloakd --models-dir /path/to/ner-models
-# 或 CLOAK_MODELS_DIR / AIFW_MODELS_DIR
+# 或 CLOAK_MODELS_DIR
 ```
 
-任何一步不成立都只打一条 warning 并退化成纯正则——与上游模型缺失时的行为一致。
+模型目录不存在、文件缺失、或二进制没带 ONNX 支持，都只打一条 warning 并退化成
+纯正则，不会让服务起不来。
 
-## 配置
+要换模型或接远程推理服务，实现 `internal/repo/nerrepo` 的 `Inferencer` 接口即可：
 
-取值优先级：**命令行 > 环境变量 > 配置文件 > 默认值**，与上游一致。
-环境变量同时认 `CLOAK_` 与 `AIFW_` 两个前缀，方便直接复用上游的环境。
-配置文件见 `configs/cloak.yaml`，字段名沿用上游 `assets/aifw.yaml`。
+```go
+type Inferencer interface {
+	Infer(ctx context.Context, inputIDs, attentionMask, tokenTypeIDs []int64) ([][]float32, error)
+	Close() error
+}
+```
 
-## 已知差异
+## 已知限制
 
-这几处与上游不同，都是权衡后的选择，不是疏漏：
+1. **真实 ONNX 推理尚未端到端验证过**。推理器接口、分词、偏移定位、BIO 聚合、
+   标签映射全部有测试覆盖（用假推理器），但真实模型那一步需要你自己补一次验证。
+2. **简繁转换未接入**。繁体模型配简体输入时，理想做法是简→繁喂模型、繁→简还原
+   token。`nerrepo.TextConverter` 接口已经留好，默认为 nil（不转换）。
+3. **没有浏览器 / WASM 端**。Go 编 WASM 在体积与 GC 上都不划算，浏览器侧建议
+   用 JS 单独实现核心逻辑——那部分本身只有几百行。
 
-1. **正则引擎**：上游为了在 WASM 里跑，用 Rust `regex-automata` 编了个 C ABI 静态库；
-   这里用标准库 `regexp`，并在编译期把 `\b` 翻译成 RE2 可表达的 Unicode 词边界写法
-   （见 `internal/repo/regexrepo/wordboundary.go`）。规则表里的表达式与上游逐字节一致。
-2. **偏移全程按字节**：上游 Python 绑定按码点算完再转字节偏移，Go 的字符串本身就是
-   字节序列，那层转换不存在。大小写转换会改变字节长度的字符（`İ`、`K`）另做了索引映射，
-   否则偏移会整体错位。
-3. **`maskMeta` 编码**：上游 core 是二进制布局，这里是 `base64(JSON)`。对调用方同样不透明。
-   注意它**含有原文**，要和脱敏前的文本同等看待，不要写进日志或转给第三方——上游同此。
-4. **简繁转换未接入**：上游用 OpenCC 做简→繁喂模型、繁→简还原 token。这里留了
-   `nerrepo.TextConverter` 接口，默认为 nil（不转换）。上游在没装 OpenCC 时也是跳过。
-5. **`pkg/onnxrt` 无法在无模型环境下端到端验证**：推理器接口、分词、定位、聚合、
-   标签映射全部有测试覆盖（用假推理器），但真实模型推理这一步需要你自己补一次验证。
+## 开发
 
-## 当前进度
+```bash
+make            # fmt + vet + test + build
+make test
+make wire       # 改了 ProviderSet 之后重新生成注入代码
+make clean
+```
 
-已完成：正则识别、区间规整、占位符与还原、脱敏开关、中文地址融合、NER 流水线、
-LLM 代理、CLI、HTTP 服务、wire 装配。
+## License
 
-未做：浏览器/WASM 端（Go 编 WASM 体积与 GC 都不划算，那条线建议保留上游的 Zig wasm
-或用 JS 重写核心逻辑，核心逻辑本身只有几百行）。
+MIT，见 [LICENSE](LICENSE)。

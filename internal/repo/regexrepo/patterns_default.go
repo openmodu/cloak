@@ -2,11 +2,13 @@ package regexrepo
 
 import "github.com/openmodu/cloak/internal/types"
 
-// PresetSpecsFor 返回某个实体类型的内置规则，逐条对齐上游
-// core/RegexRecognizer.zig 里的 *_SPECS，包括分数与捕获组。
+// PresetSpecsFor 返回某个实体类型的内置规则。
 //
-// 全部表达式都在 RE2 语法内（无反向引用、无 lookaround），标准库 regexp 可直接编译，
-// 上游为了在 WASM 里跑而引入的 Rust regex-automata C ABI 静态库因此整层省掉。
+// 分数是这套识别的核心调参位：它决定区间能否过阈值（0.5），以及多条规则命中
+// 同一段文字时谁胜出。改动前先跑一遍金样本回归。
+//
+// 全部表达式都在 RE2 语法内（无反向引用、无 lookaround），标准库 regexp 直接编译，
+// 不需要引入任何第三方正则引擎。
 func PresetSpecsFor(t types.EntityType) []PatternSpec {
 	switch t {
 	case types.EntityEmailAddress:

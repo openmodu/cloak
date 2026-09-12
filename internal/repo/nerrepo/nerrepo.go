@@ -1,11 +1,11 @@
 // Package nerrepo 用本地 NER 模型识别敏感实体，实现 usecase.Recognizer。
 //
-// 与上游同构：模型推理由宿主环境负责（上游是 transformers.js / onnxruntime，
-// 这里是 Inferencer 接口），本包负责推理前后的全部处理——分词、softmax、
+// 推理本身交给 Inferencer 接口，本包负责推理前后的全部处理——分词、softmax、
 // token 回原文定位、相邻片段合并、BIO 聚合、标签到实体类型的映射。
+// 这样换推理后端（本地 ONNX、远程服务）不影响这里的任何逻辑。
 //
-// 模型缺失时上游会打一条 warning 然后退化成「只有正则」，这里保持同样的行为：
-// New 在模型目录不可用时返回 ErrModelUnavailable，由装配层决定是否接入。
+// 模型不可用时返回 ErrModelUnavailable，由装配层决定是否接入——
+// 缺模型只该退化成「只有正则」，不该让整个服务起不来。
 package nerrepo
 
 import (
@@ -31,8 +31,9 @@ type Inferencer interface {
 	Close() error
 }
 
-// TextConverter 用于简繁转换。上游在简体输入配合繁体模型时会做
-// 简→繁 喂模型、繁→简 还原 token 的处理；没装 OpenCC 就跳过，这里同样可以传 nil。
+// TextConverter 用于简繁转换：繁体模型配简体输入时，理想做法是
+// 简→繁 喂模型、繁→简 还原 token，好让 token 能在原文里定位到。
+// 不需要转换时传 nil 即可。
 type TextConverter interface {
 	ToModel(text string) string   // 喂给模型前的转换
 	ToSource(token string) string // token 回原文定位前的反向转换
@@ -59,7 +60,7 @@ func WithConverter(c TextConverter) Option {
 }
 
 // WithLanguageFilter 限定该识别器只在特定语言下参与识别。
-// 上游按语言在中英两个模型之间二选一，这里用同样的方式表达。
+// 中英文各挂一个模型时用它做分流，不匹配的语言直接跳过，省掉一次推理。
 func WithLanguageFilter(f func(types.Language) bool) Option {
 	return func(r *Recognizer) { r.forLang = f }
 }
@@ -89,7 +90,7 @@ func New(name string, tk *tokenize.Tokenizer, inf Inferencer, id2label map[int]s
 	return r
 }
 
-// LoadFromDir 按上游的目录约定加载模型：
+// LoadFromDir 按约定的目录布局加载模型：
 //
 //	<modelDir>/vocab.txt 或 tokenizer.json
 //	<modelDir>/config.json          （提供 id2label）
@@ -147,7 +148,7 @@ func (r *Recognizer) Close() error {
 	return r.inf.Close()
 }
 
-// runOptions 对应上游 pipeline.run 的 opts。
+// runOptions 是一次识别的可选参数。
 type runOptions struct {
 	offsetText     string
 	tokenTransform func(string) string

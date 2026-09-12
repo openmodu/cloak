@@ -65,8 +65,7 @@ func adjustAdminRoadChunkStart(text string, level AddrLevel, s0, suffixPos int) 
 // tokenizeWindow 扫描 [start,end) 并切出地址成分，返回出现过的层级位图、
 // token 列表，以及最后一个 token 的结束位置（没有 token 时原样返回传入的 newEnd）。
 //
-// 逐段对应上游 zhTokenizeWindow：识别顺序即优先级，先粗后细，
-// 命中后把游标推到该 token 末尾继续扫。
+// 识别顺序即优先级，先粗后细；命中后把游标推到该 token 末尾继续扫。
 func tokenizeWindow(text string, start, end, newEnd int) (uint32, []token, int) {
 	var bits uint32
 	var tokens []token

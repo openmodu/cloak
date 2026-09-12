@@ -1,6 +1,6 @@
-# cloak 服务配置示例。字段名沿用上游 aifw.yaml，既有配置可直接搬过来。
+# cloak 服务配置示例。
 # 取值优先级：命令行 > 环境变量 > 本文件 > 默认值。
-# 环境变量同时认 CLOAK_ 与 AIFW_ 两个前缀，例如 CLOAK_PORT / AIFW_PORT。
+# 环境变量前缀是 CLOAK_，例如 CLOAK_PORT、CLOAK_API_KEY_FILE。
 
 port: 8844
 

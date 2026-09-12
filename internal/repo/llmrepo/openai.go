@@ -1,7 +1,6 @@
 // Package llmrepo 包装下游大模型调用，实现 usecase.LLMClient。
 //
-// 只讲 OpenAI 兼容的 /chat/completions 协议——上游各语言绑定对接的也是这一套，
-// 换厂商靠改 base URL，不在代码里分支。
+// 只讲 OpenAI 兼容的 /chat/completions 协议：换厂商靠改 base URL，不在代码里分支。
 package llmrepo
 
 import (

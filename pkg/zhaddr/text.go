@@ -1,7 +1,7 @@
 package zhaddr
 
-// 以下一组工具逐个对应上游 core/merge_zh_addr.zig 顶部的同名函数。
-// 全部按字节偏移工作：Go 的 string 本身就是 UTF-8 字节序列，与上游的 []const u8 同构。
+// 以下一组文本工具全部按字节偏移工作——Go 的 string 本身就是 UTF-8 字节序列，
+// 区间直接用字节下标表达，不需要额外的码点换算。
 
 // isASCIILight 是「轻分隔符」：空白与半角逗号。地址各段之间允许夹这些字符。
 func isASCIILight(b byte) bool {
@@ -14,7 +14,7 @@ func isASCIIAlpha(b byte) bool {
 
 func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
-// utf8CpLenAt 返回 pos 处字符的字节长度，越界或非法时返回 1，与上游一致。
+// utf8CpLenAt 返回 pos 处字符的字节长度；越界或字节非法时返回 1，保证调用方一定能前进。
 func utf8CpLenAt(text string, pos int) int {
 	if pos >= len(text) {
 		return 1

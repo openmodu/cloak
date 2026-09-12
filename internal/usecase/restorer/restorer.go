@@ -22,8 +22,8 @@ type slot struct {
 	text  string
 }
 
-// Restore 复刻上游 RestorePipeline.run 的做法：由凭据驱动，为每条记录重新生成
-// 占位符文本，在 masked 里找它**第一次出现**的位置，按位置排序后一次性重建文本。
+// Restore 由凭据驱动：为每条记录重新生成占位符文本，在 masked 里找它
+// **第一次出现**的位置，按位置排序后一次性重建文本。
 //
 // 由此带来的行为同样保留：同一个占位符在回复里出现多次时只还原第一处；
 // 凭据里有而回复里没有的（被模型吞掉）跳过；回复里出现的陌生占位符原样保留。
@@ -37,7 +37,7 @@ func (r *Restorer) Restore(_ context.Context, masked string, meta *types.MaskMet
 		ph := placeholder.Render(it.Type.String(), it.ID)
 		start := strings.Index(masked, ph)
 		if start < 0 {
-			continue // 上游在这里只打一条 warn 后跳过
+			continue // 模型把这个占位符弄丢了，跳过即可，不该让整次还原失败
 		}
 		sp := types.Span{Type: it.Type, Start: it.Start, End: it.End}
 		if !sp.ValidIn(len(meta.Original)) {

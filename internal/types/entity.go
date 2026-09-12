@@ -1,7 +1,9 @@
 package types
 
-// EntityType 是受保护的敏感实体类型。取值与上游 aifw core 的 EntityType 枚举
-// 逐一对应，String() 的返回值直接用作占位符里的 TAG，因此不可随意改名。
+// EntityType 是受保护的敏感实体类型。
+//
+// String() 的返回值直接用作占位符里的 TAG，改名会让已经发出去的还原凭据对不上，
+// 因此这组名字是对外契约的一部分，不要随意调整。
 type EntityType uint8
 
 const (

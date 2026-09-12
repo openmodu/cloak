@@ -10,8 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// FileConfig 是 cloak.yaml 的结构，字段名沿用上游 assets/aifw.yaml，
-// 便于直接搬运既有配置文件。
+// FileConfig 是 cloak.yaml 的结构。
 type FileConfig struct {
 	Port        int              `yaml:"port"`
 	APIKeyFile  string           `yaml:"api_key_file"`
@@ -41,10 +40,8 @@ func LoadFile(path string) (FileConfig, error) {
 	return cfg, nil
 }
 
-// Resolve 按「命令行 > 环境变量 > 配置文件 > 默认值」的顺序取值，
-// 与上游 README 里写明的优先级一致。
-//
-// 环境变量同时认 CLOAK_ 与 AIFW_ 两个前缀，后者是为了让上游用户的既有环境直接可用。
+// Resolve 按「命令行 > 环境变量 > 配置文件 > 默认值」的顺序取值。
+// 越靠近调用现场的来源优先级越高，便于临时覆盖而不改配置文件。
 func Resolve(flagVal string, envNames []string, fileVal string, def string) string {
 	if flagVal != "" {
 		return flagVal
@@ -78,9 +75,9 @@ func ResolveInt(flagVal int, envNames []string, fileVal int, def int) int {
 	return def
 }
 
-// EnvNames 返回一个配置项在两种前缀下的环境变量名。
+// EnvNames 返回一个配置项对应的环境变量名。
 func EnvNames(suffix string) []string {
-	return []string{"CLOAK_" + suffix, "AIFW_" + suffix}
+	return []string{"CLOAK_" + suffix}
 }
 
 func expandHome(path string) string {

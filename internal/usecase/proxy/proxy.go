@@ -1,5 +1,4 @@
 // Package proxy 实现完整链路用例：脱敏 → 调用大模型 → 还原。
-// 对应上游 HTTP 服务的 /api/call。
 package proxy
 
 import (

@@ -10,7 +10,7 @@ func TestRenderMatchesUpstreamFormat(t *testing.T) {
 	}{
 		{"EMAIL_ADDRESS", 1, "__PII_EMAIL_ADDRESS_1__"},
 		{"PHONE_NUMBER", 42, "__PII_PHONE_NUMBER_42__"},
-		// 上游用 {d} 直接格式化，不做零填充
+		// 序号直接十进制格式化，不做零填充
 		{"URL_ADDRESS", 11, "__PII_URL_ADDRESS_11__"},
 	}
 	for _, c := range cases {

@@ -1,5 +1,4 @@
-// Command cloakd 是 OneAIFW Go 版的 HTTP 服务入口。
-// 接口与上游 docs/oneaifw_services_api.md 对齐。
+// Command cloakd 是 cloak 的 HTTP 服务入口。
 package main
 
 import (

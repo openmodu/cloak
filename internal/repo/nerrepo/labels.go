@@ -7,7 +7,7 @@ import (
 )
 
 // splitLabel 把 "B-PER" 这样的标签拆成核心类别与 BIO 标记。
-// 对应上游 libaifw.py 的 _to_core_and_tag：S- 视同 B-，E- 视同 I-。
+// 兼容 BIOES 标注：S-（单字实体）视同 B-，E-（实体结尾）视同 I-。
 func splitLabel(label string) (core string, tag types.BIOTag) {
 	s := strings.TrimSpace(label)
 	switch {
@@ -22,7 +22,7 @@ func splitLabel(label string) (core string, tag types.BIOTag) {
 }
 
 // labelToEntityType 把模型的标签类别映射成受保护的实体类型。
-// 对应上游 libaifw.py 的 _to_entity_type；认不出来的一律当作非敏感。
+// 认不出来的一律当作非敏感——宁可漏标，也不要把普通词当成实体打码。
 func labelToEntityType(core string) types.EntityType {
 	switch strings.ToUpper(core) {
 	case "PER", "PERSON":

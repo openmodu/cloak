@@ -77,7 +77,7 @@ func TestRecognizeCommonEntities(t *testing.T) {
 		want string
 	}{
 		{"email", "contact a.b+1@test.io now", types.EntityEmailAddress, "a.b+1@test.io"},
-		{"url", "see https://ziglang.org/x?a=1 ok", types.EntityURLAddress, "https://ziglang.org/x?a=1"},
+		{"url", "see https://example.com/x?a=1 ok", types.EntityURLAddress, "https://example.com/x?a=1"},
 		{"phone", "call +1 415-555-2671 now", types.EntityPhoneNumber, "+1 415-555-2671"},
 		{"bank", "acct 4242424242424242 end", types.EntityBankNumber, "4242424242424242"},
 		{"vcode", "code 123456 end", types.EntityVerificationCode, "123456"},

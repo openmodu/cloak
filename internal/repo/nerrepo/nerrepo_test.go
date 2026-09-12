@@ -98,7 +98,7 @@ func TestRecognizeChinese(t *testing.T) {
 	}
 }
 
-// 语言过滤器让中英两个模型各管各的，与上游按语言二选一等价。
+// 语言过滤器让中英两个模型各管各的，不匹配的语言直接跳过，省掉一次推理。
 func TestLanguageFilterSkipsRecognizer(t *testing.T) {
 	r := newTestRecognizer(t,
 		map[string]int{"john": 1},

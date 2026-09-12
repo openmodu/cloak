@@ -1,5 +1,4 @@
-// Package http 是 HTTP 适配层，路由与报文格式对齐上游
-// docs/oneaifw_services_api.md，不含业务判断。
+// Package http 是 HTTP 适配层：解析请求、调用用例、组装响应，不含业务判断。
 package http
 
 import (

@@ -1,7 +1,7 @@
 GOPATH_BIN := $(shell go env GOPATH)/bin
 WIRE_VERSION := v0.7.0
 
-.PHONY: all build test vet fmt wire wire-install crosscheck clean
+.PHONY: all build test vet fmt wire wire-install clean
 
 all: fmt vet test build
 
@@ -24,10 +24,6 @@ wire: wire-install
 
 wire-install:
 	@command -v $(GOPATH_BIN)/wire >/dev/null 2>&1 || go install github.com/google/wire/cmd/wire@$(WIRE_VERSION)
-
-# 与上游 aifw 的 Zig 实现对拍中文地址融合，需要 zig 0.15.x
-crosscheck:
-	./scripts/crosscheck-zhaddr.sh
 
 clean:
 	rm -rf bin

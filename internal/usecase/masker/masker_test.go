@@ -119,7 +119,7 @@ func TestSpansAreNormalized(t *testing.T) {
 	}
 }
 
-// Spans 与上游 get_pii_spans 一致：跑的是完整脱敏流程，因此被开关关掉的类型不会出现。
+// Spans 跑的是完整脱敏流程，因此被开关关掉的类型不会出现在结果里。
 func TestSpansRespectMaskConfig(t *testing.T) {
 	m := New(
 		WithRecognizers(stubRecognizer{name: "stub", spans: []types.Span{

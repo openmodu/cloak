@@ -1,5 +1,4 @@
 // Package masker 实现脱敏用例：编排识别器、规整区间、产出占位符文本与还原凭据。
-// 流程逐段对应上游 core/aifw_core.zig 的 MaskPipeline.run。
 package masker
 
 import (
@@ -14,7 +13,8 @@ import (
 	"github.com/openmodu/cloak/pkg/zhaddr"
 )
 
-// DefaultMinScore 是区间被采纳的最低置信度，与上游写死的 0.5 一致。
+// DefaultMinScore 是区间被采纳的最低置信度。
+// 调低会增加误伤，调高会漏标；改之前先跑一遍金样本回归。
 const DefaultMinScore float32 = 0.5
 
 // Masker 是脱敏用例对象。它只持有接口，不关心识别能力来自正则还是模型。
@@ -27,7 +27,7 @@ type Masker struct {
 
 type Option func(*Masker)
 
-// WithRecognizers 追加识别器。顺序会影响同分同范围区间的取舍，需与上游保持一致。
+// WithRecognizers 追加识别器。顺序会影响完全同分同范围区间的取舍，别随意调整。
 func WithRecognizers(rs ...usecase.Recognizer) Option {
 	return func(m *Masker) { m.recognizers = append(m.recognizers, rs...) }
 }
@@ -56,13 +56,13 @@ func New(opts ...Option) *Masker {
 }
 
 // Mask 把文本中的敏感区间替换成占位符，同时产出还原凭据。
-// 被配置关闭的实体类型原样保留，也不写进凭据——与上游一致。
+// 被配置关闭的实体类型原样保留，也不写进凭据。
 func (m *Masker) Mask(ctx context.Context, text string) (string, *types.MaskMeta, error) {
 	return m.MaskWithLanguage(ctx, text, types.LangUnknown)
 }
 
-// MaskWithLanguage 指定语言脱敏。上游的 core 接口同样把语言作为入参，由绑定层
-// 在调用方没给的时候自动判定；lang 传空即走自动判定。
+// MaskWithLanguage 指定语言脱敏。调用方明确知道语言时直接传，省掉一次判定，
+// 也避免短文本被判错；lang 传空则自动判定。
 func (m *Masker) MaskWithLanguage(ctx context.Context, text string, lang types.Language) (string, *types.MaskMeta, error) {
 	meta := &types.MaskMeta{Original: text}
 	if text == "" {
@@ -105,8 +105,8 @@ func (m *Masker) MaskWithLanguage(ctx context.Context, text string, lang types.L
 	return b.String(), meta, nil
 }
 
-// Spans 对应上游的 aifw_session_get_pii_spans：跑完整条脱敏流程后丢掉masked 文本，
-// 只返回被记录下来的区间。因此它同样受脱敏开关影响——被关掉的类型不会出现在结果里。
+// Spans 跑完整条脱敏流程后丢掉脱敏文本，只返回被记录下来的区间，用于排查与调参。
+// 因此它同样受脱敏开关影响——被关掉的类型不会出现在结果里。
 func (m *Masker) Spans(ctx context.Context, text string) ([]types.MaskedItem, error) {
 	_, meta, err := m.MaskWithLanguage(ctx, text, types.LangUnknown)
 	if err != nil {
@@ -153,7 +153,7 @@ func (m *Masker) detectSpans(ctx context.Context, text string, lang types.Langua
 	return span.Normalize(merged, m.minScore), nil
 }
 
-// mergeChineseAddress 用中文地址规则重组区间，对应上游 MaskPipeline.run 的 3.1 步。
+// mergeChineseAddress 用中文地址规则重组区间。
 //
 // NER 常把一个完整地址切成几段，融合后的地址区间才是准的，因此原有的地址区间
 // 全部让位给融合结果；机构名若已被某个融合地址完整覆盖（例如「K11購物藝術館」

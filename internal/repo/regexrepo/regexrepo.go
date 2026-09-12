@@ -1,7 +1,8 @@
 // Package regexrepo 提供基于正则的识别器，实现 usecase.Recognizer。
 //
-// 与上游一致：一个 Recognizer 只负责一种实体类型，持有该类型的规则集和一个可选的
-// 二次校验函数；整套识别能力由 NewDefaultSet 按实体枚举顺序建出的一组实例组成。
+// 一个 Recognizer 只负责一种实体类型，持有该类型的规则集和一个可选的二次校验函数；
+// 整套识别能力由 NewDefaultSet 按实体枚举顺序建出的一组实例组成。
+// 拆成一类一个实例，是为了让每类实体能独立配置规则与校验逻辑。
 package regexrepo
 
 import (
@@ -10,7 +11,7 @@ import (
 	"github.com/openmodu/cloak/internal/types"
 )
 
-// Recognizer 对应上游的 RegexRecognizer，一个实例只产出一种实体类型的区间。
+// Recognizer 是一种实体类型的正则识别器，一个实例只产出这一种类型的区间。
 type Recognizer struct {
 	entityType types.EntityType
 	patterns   []compiledPattern
@@ -19,7 +20,7 @@ type Recognizer struct {
 
 // New 构造某个实体类型的识别器。
 //
-// 与上游同构：内置规则总是生效，extra 里与内置重复的规则会被跳过，
+// 内置规则总是生效，extra 里与内置重复的规则会被跳过，
 // 因此传 nil 就等价于「只用内置规则」。
 func New(entityType types.EntityType, extra []PatternSpec, validate ValidateFunc) (*Recognizer, error) {
 	preset := PresetSpecsFor(entityType)
@@ -50,7 +51,7 @@ func New(entityType types.EntityType, extra []PatternSpec, validate ValidateFunc
 }
 
 // NewDefaultSet 按实体类型枚举顺序建出全套内置识别器。
-// 顺序会影响后续排序中完全同分同范围区间的取舍，因此必须与上游一致。
+// 顺序会影响后续排序中完全同分同范围区间的取舍，调整前先跑一遍金样本回归。
 func NewDefaultSet() ([]*Recognizer, error) {
 	types_ := types.AllEntityTypes()
 	out := make([]*Recognizer, 0, len(types_))

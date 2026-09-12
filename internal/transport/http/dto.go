@@ -1,7 +1,7 @@
 package http
 
-// 请求与响应结构逐条对应上游 docs/oneaifw_services_api.md。
-// 响应统一是 {"output": ..., "error": ...} 信封。
+// 请求与响应结构。响应统一是 {"output": ..., "error": ...} 信封，
+// 成功时 error 为 null，失败时 output 为 null。
 
 type envelope struct {
 	Output any     `json:"output"`

@@ -1,7 +1,7 @@
 package types
 
-// MaskConfig 用位图表示每类实体是否需要脱敏。位序与上游 aifw core 的
-// ENABLE_MASK_*_BIT 一致，方便两端互通配置。
+// MaskConfig 用位图表示每类实体是否需要脱敏。
+// 位序与 EntityType 的枚举顺序绑定，序列化后能直接在进程间传递。
 type MaskConfig struct {
 	Bits uint32 `json:"bits"`
 }
@@ -22,7 +22,7 @@ func AllMaskBits() uint32 {
 	return bits
 }
 
-// DefaultMaskConfig 与上游默认值一致：除物理地址外全部开启。
+// DefaultMaskConfig 是默认开关：除物理地址外全部开启。
 // 地址默认关闭是因为它极易误伤正常语句，需要使用者显式打开。
 func DefaultMaskConfig() MaskConfig {
 	return MaskConfig{Bits: AllMaskBits() &^ bitOf(EntityPhysicalAddress)}

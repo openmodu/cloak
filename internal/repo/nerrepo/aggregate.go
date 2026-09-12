@@ -62,8 +62,8 @@ func aggregateOne(text string, tokens []types.NERToken, from int) (types.Span, i
 			span.End = tok.End
 			span.Score = score
 		case hasSubwordPrefix(sliceOf(text, tok.Start, tok.End)):
-			// 上游在这里检查的是**原文切片**是否以 "##" 开头，而不是 token 串。
-			// 原文里几乎不会出现 "##"，所以这条分支实际上极少触发；照搬以保持一致。
+			// 这里检查的是**原文切片**是否以 "##" 开头，而不是 token 串——
+			// 兜底用于原文本身就含 "##" 的场景，实际极少触发。
 			span.End = tok.End
 			span.Score = score
 		default:

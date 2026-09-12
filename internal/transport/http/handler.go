@@ -111,7 +111,7 @@ func (s *Server) handleRestoreTextBatch(w http.ResponseWriter, r *http.Request) 
 }
 
 // maskOne 脱敏一条文本并把还原凭据编码成不透明字符串交还调用方。
-// 服务端不留存凭据，还原时由调用方带回来——与上游一致。
+// 服务端不留存凭据，还原时由调用方带回来。
 func (s *Server) maskOne(r *http.Request, req maskRequest) (maskOutput, error) {
 	masked, meta, err := s.masker.MaskWithLanguage(r.Context(), req.Text, types.Language(req.Language))
 	if err != nil {
