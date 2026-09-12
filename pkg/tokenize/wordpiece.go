@@ -2,6 +2,7 @@ package tokenize
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/text/runes"
@@ -11,6 +12,7 @@ import (
 
 // Tokenizer 是 BERT 的两段式分词：先 BasicTokenizer 切成词，再 WordPiece 切成子词。
 type Tokenizer struct {
+	mu    sync.Mutex // transform.Transformer keeps mutable normalization buffers.
 	vocab *Vocab
 	cfg   Config
 	strip transform.Transformer
@@ -51,6 +53,8 @@ func Load(modelDir string) (*Tokenizer, error) {
 
 // Encode 把文本编码成模型输入。maxLen <= 0 表示不截断。
 func (t *Tokenizer) Encode(text string, maxLen int) Encoding {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	var enc Encoding
 	t.appendSpecial(&enc, t.cfg.ClsToken)
 

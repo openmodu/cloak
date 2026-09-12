@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/openmodu/cloak/internal/types"
 	"github.com/openmodu/cloak/pkg/tokenize"
@@ -35,8 +36,8 @@ type Inferencer interface {
 // 简→繁 喂模型、繁→简 还原 token，好让 token 能在原文里定位到。
 // 不需要转换时传 nil 即可。
 type TextConverter interface {
-	ToModel(text string) string   // 喂给模型前的转换
-	ToSource(token string) string // token 回原文定位前的反向转换
+	ToModel(context.Context, string) (string, error)
+	ToSource(context.Context, []string) ([]string, error)
 }
 
 // MaxSeqLen 是截断长度，与常见 BERT 系模型的位置编码上限一致。
@@ -169,12 +170,34 @@ func (r *Recognizer) Recognize(ctx context.Context, text string, lang types.Lang
 	// 简繁不匹配时：转换后的文本喂模型，偏移仍然按原文算
 	runText := text
 	opts := runOptions{offsetText: text, ignore: r.ignore}
-	if r.converter != nil {
-		runText = r.converter.ToModel(text)
-		opts.tokenTransform = r.converter.ToSource
+	convert := r.converter != nil && lang.IsChinese() && lang != types.LangZhHant
+	if convert {
+		var err error
+		runText, err = r.converter.ToModel(ctx, text)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	enc := r.tokenizer.Encode(runText, MaxSeqLen)
+	if convert {
+		tokens := make([]string, len(enc.Tokens))
+		for i, t := range enc.Tokens {
+			tokens[i] = strings.TrimPrefix(t, "##")
+		}
+		converted, err := r.converter.ToSource(ctx, tokens)
+		if err != nil {
+			return nil, err
+		}
+		if len(converted) != len(tokens) {
+			return nil, fmt.Errorf("converter returned wrong token count")
+		}
+		mapping := make(map[string]string, len(tokens))
+		for i, t := range tokens {
+			mapping[t] = converted[i]
+		}
+		opts.tokenTransform = func(t string) string { return mapping[t] }
+	}
 	attention := make([]int64, len(enc.IDs))
 	tokenTypes := make([]int64, len(enc.IDs))
 	for i := range attention {

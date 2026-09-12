@@ -29,7 +29,7 @@ func InitApp(cfg Config) (*App, error) {
 	v3 := ProvideRecognizers(v, v2)
 	detector := langrepo.New()
 	memory := confrepo.NewDefault()
-	masker := ProvideMasker(v3, detector, memory)
+	masker := ProvideMasker(v3, detector, memory, cfg)
 	restorerRestorer := restorer.New()
 	app := NewApp(masker, restorerRestorer, memory)
 	return app, nil
@@ -48,7 +48,7 @@ func InitServer(cfg Config) (*http.Server, error) {
 	v3 := ProvideRecognizers(v, v2)
 	detector := langrepo.New()
 	memory := confrepo.NewDefault()
-	masker := ProvideMasker(v3, detector, memory)
+	masker := ProvideMasker(v3, detector, memory, cfg)
 	restorerRestorer := restorer.New()
 	app := NewApp(masker, restorerRestorer, memory)
 	llmClient, err := ProvideLLMClient(cfg)

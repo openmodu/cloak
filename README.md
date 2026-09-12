@@ -8,8 +8,8 @@
 原文 <──restore── 带占位符的回复 <───────────┘
 ```
 
-敏感内容永远不离开本机：替换成占位符再发出去，模型回复里的占位符再按凭据换回原文。
-凭据只存位置，不复制内容。
+识别并启用脱敏的内容会替换成占位符再发出去，模型回复里的占位符按凭据换回原文。
+识别可能漏检；默认构建也不含 NER。还原凭据含敏感原文，不能发送给模型或写入日志。
 
 ## 保护范围
 
@@ -33,6 +33,7 @@ make build
 ./bin/cloak roundtrip -f testdata/en_pii.txt   # 脱敏 + 还原并校验往返一致
 ./bin/cloak mask      -f testdata/zh_pii.txt   # 只输出脱敏文本
 ./bin/cloak spans     -f testdata/en_pii.txt   # 以 JSON 查看被脱敏的区间
+./bin/cloak mask --json -f testdata/en_pii.txt | ./bin/cloak restore
 
 # HTTP 服务
 ./bin/cloakd --port 8844
@@ -55,11 +56,16 @@ curl -s localhost:8844/api/health
 | POST | `/api/restore_text_batch` | 批量还原 |
 | POST | `/api/config` | 免重启修改脱敏开关 |
 
-响应统一是 `{"output": ..., "error": ...}` 信封。`Authorization` 头支持裸 key
+响应使用 `{"output": ..., "error": ...}` 信封（health 返回独立状态对象）。错误为
+`{"message":"...","code":null}`，并保留有意义的 HTTP 4xx/5xx 状态码。
+`Authorization` 头支持裸 key
 与 `Bearer <key>` 两种写法，不配置访问口令时不校验。
 
 还原凭据（`maskMeta`）**服务端不留存**，随响应交给调用方，还原时原样带回来。
 注意它里面含有原文，要和脱敏前的文本同等看待——不要写进日志，不要转给第三方。
+
+HTTP 和 CLI JSON 输出使用 aifw 小端二进制凭据格式，只序列化命中的文本片段；
+还原同时接受此格式与 cloak 旧版的 base64(JSON) 格式。详见 [兼容说明](docs/compatibility.md)。
 
 ## 工程约定
 
@@ -137,10 +143,11 @@ LLM API key 文件格式：
 make            # fmt + vet + test + build
 ```
 
-84 个测试，13 个包。另外确认带 ONNX 的构建也是通的：
+另外检查并发安全和带 ONNX 标签的构建：
 
 ```bash
 CGO_ENABLED=1 go vet -tags cloak_onnx ./...
+make test-race
 ```
 
 ### 2. 金样本回归
@@ -274,12 +281,15 @@ type Inferencer interface {
 
 ## 已知限制
 
-1. **真实 ONNX 推理尚未端到端验证过**。推理器接口、分词、偏移定位、BIO 聚合、
-   标签映射全部有测试覆盖（用假推理器），但真实模型那一步需要你自己补一次验证。
-2. **简繁转换未接入**。繁体模型配简体输入时，理想做法是简→繁喂模型、繁→简还原
-   token。`nerrepo.TextConverter` 接口已经留好，默认为 nil（不转换）。
+1. **真实 ONNX 推理需要模型文件验证**。准备模型与运行库后执行
+   `CLOAK_TEST_MODELS_DIR=/path/to/models make test-onnx`。该检查实际加载中英文模型，
+   不允许缺失模型时退化成纯正则；它是冒烟测试，不代表与 aifw 的识别效果完全相同。
+2. **简繁转换使用可选的 OpenCC 命令**。PATH 中存在 `opencc` 时自动接入中文 NER；
+   每次推理批量转换 token。未安装时告警并跳过转换，转换执行失败时中止当前识别。
 3. **没有浏览器 / WASM 端**。Go 编 WASM 在体积与 GC 上都不划算，浏览器侧建议
    用 JS 单独实现核心逻辑——那部分本身只有几百行。
+4. NER 仍截断到 512 token，超长文本末尾不会被 NER 识别；正则继续扫描全文。
+   `password:` 规则分数仍为 0.4，低于默认阈值，保持现有规则行为。
 
 ## 开发
 

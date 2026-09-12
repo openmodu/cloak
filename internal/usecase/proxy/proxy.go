@@ -24,6 +24,7 @@ func New(m *masker.Masker, r *restorer.Restorer, llm usecase.LLMClient) *Proxy {
 
 // Request 是一次完整调用的入参。
 type Request struct {
+	Language    types.Language
 	Text        string
 	Model       string
 	Temperature float32
@@ -42,7 +43,7 @@ func (p *Proxy) Call(ctx context.Context, req Request) (Result, error) {
 	if p.llm == nil {
 		return Result{}, fmt.Errorf("proxy: 未配置 LLM 客户端")
 	}
-	masked, meta, err := p.masker.Mask(ctx, req.Text)
+	masked, meta, err := p.masker.MaskWithLanguage(ctx, req.Text, req.Language)
 	if err != nil {
 		return Result{}, fmt.Errorf("proxy: 脱敏失败: %w", err)
 	}

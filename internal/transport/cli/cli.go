@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/openmodu/cloak/internal/repo/llmrepo"
+	"github.com/openmodu/cloak/internal/types"
+	"github.com/openmodu/cloak/internal/usecase/proxy"
 	"io"
 	"os"
 
@@ -20,6 +23,13 @@ const usage = `cloak — 发给大模型之前脱敏，拿回结果之后还原
   cloak mask      [-f 文件]         输出脱敏后的文本
   cloak spans     [-f 文件]         以 JSON 输出识别到的敏感区间
   cloak roundtrip [-f 文件]         脱敏后立即还原，校验与原文一致
+  cloak mask --json [-f 文件]       输出 text 与 maskMeta，供以后还原
+  cloak restore [-f JSON文件]       从 {text, maskMeta} 还原
+  cloak mask-batch [-f JSON文件]    输入 [{text, language}]，输出凭据数组
+  cloak restore-batch [-f JSON文件] 输入 [{text, maskMeta}]，输出原文数组
+  cloak call --api-key-file 文件    脱敏 → LLM → 还原
+
+可选参数：--config YAML文件、--models-dir 目录、--language 语言。
 
 不带 -f 时从标准输入读取。
 `
@@ -32,11 +42,38 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	cmd := args[0]
+	if cmd == "help" || cmd == "-h" || cmd == "--help" {
+		fmt.Fprint(stdout, usage)
+		return 0
+	}
+	switch cmd {
+	case "mask", "spans", "roundtrip", "restore", "mask-batch", "restore-batch", "call":
+	default:
+		fmt.Fprintf(stderr, "未知命令: %s\n%s", cmd, usage)
+		return 2
+	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	file := fs.String("f", "", "输入文件，缺省从标准输入读取")
+	configPath := fs.String("config", "", "YAML 配置")
+	modelsDir := fs.String("models-dir", "", "NER 模型目录")
+	language := fs.String("language", "", "语言，空或 auto 自动检测")
+	jsonOutput := fs.Bool("json", false, "输出可还原 JSON")
+	keyFile := fs.String("api-key-file", "", "LLM 配置")
+	model := fs.String("model", "", "模型")
+	temperature := fs.String("temperature", "", "温度")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
+	}
+	fileCfg, err := confrepo.LoadFile(*configPath)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	resolvedTemperature, err := confrepo.ResolveTemperature(*temperature, fileCfg.Temperature)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 
 	text, err := readInput(*file, stdin)
@@ -46,7 +83,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	app, err := bootstrap.InitApp(bootstrap.Config{
-		ModelsDir: confrepo.Resolve("", confrepo.EnvNames("MODELS_DIR"), "", ""),
+		ModelsDir:  confrepo.Resolve(*modelsDir, confrepo.EnvNames("MODELS_DIR"), fileCfg.ModelsDir, ""),
+		MaskConfig: fileCfg.MaskConfig,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "初始化失败:", err)
@@ -54,28 +92,61 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
+	if cmd == "restore" || cmd == "mask-batch" || cmd == "restore-batch" {
+		if err := runJSON(ctx, app, cmd, text, *language, stdout); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	}
+	if cmd == "call" {
+		client, err := llmrepo.NewFromFile(confrepo.Resolve(*keyFile, confrepo.EnvNames("API_KEY_FILE"), fileCfg.APIKeyFile, ""))
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		res, err := proxy.New(app.Masker, app.Restorer, client).Call(ctx, proxy.Request{Text: text, Model: *model, Temperature: resolvedTemperature, Language: types.Language(*language)})
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		fmt.Fprint(stdout, res.Text)
+		return 0
+	}
 	switch cmd {
 	case "mask":
-		masked, _, err := app.Masker.Mask(ctx, text)
+		masked, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
 			fmt.Fprintln(stderr, "脱敏失败:", err)
 			return 1
 		}
-		fmt.Fprint(stdout, masked)
+		if *jsonOutput {
+			encoded, err := meta.EncodeAIFW()
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			if err := json.NewEncoder(stdout).Encode(jsonText{Text: masked, MaskMeta: encoded}); err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+		} else {
+			fmt.Fprint(stdout, masked)
+		}
 	case "spans":
-		spans, err := app.Masker.Spans(ctx, text)
+		_, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
 			fmt.Fprintln(stderr, "识别失败:", err)
 			return 1
 		}
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		if err := enc.Encode(spansView(text, spans)); err != nil {
+		if err := enc.Encode(spansView(text, meta.Items)); err != nil {
 			fmt.Fprintln(stderr, "序列化失败:", err)
 			return 1
 		}
 	case "roundtrip":
-		masked, meta, err := app.Masker.Mask(ctx, text)
+		masked, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
 			fmt.Fprintln(stderr, "脱敏失败:", err)
 			return 1

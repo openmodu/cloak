@@ -15,7 +15,7 @@ import (
 // 再用捕获组取回真正的区间。为了让规则表里仍然能直观地写 `\b`，
 // 这个改写放在编译期做。
 const (
-	wordClass    = `\p{L}\p{N}_`
+	wordClass    = `\p{L}\p{Nl}\p{M}\p{Nd}\p{Pc}\x{200C}\x{200D}`
 	leftBoundary = `(?:\A|[^` + wordClass + `])`
 	// 末尾用 \z 而不是 $：$ 会在换行前也成立，这里要的是真正的串尾。
 	rightBoundary = `(?:[^` + wordClass + `]|\z)`

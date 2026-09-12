@@ -131,7 +131,7 @@ func (m *Masker) MaskBatch(ctx context.Context, texts []string) ([]string, []*ty
 
 // detectSpans 汇总各识别器的结果并规整成互不重叠、按位置升序的区间。
 func (m *Masker) detectSpans(ctx context.Context, text string, lang types.Language) ([]types.Span, error) {
-	if lang == types.LangUnknown {
+	if lang == types.LangUnknown || lang == "auto" {
 		lang = m.detect(text)
 	}
 

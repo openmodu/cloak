@@ -4,8 +4,13 @@ package http
 // 成功时 error 为 null，失败时 output 为 null。
 
 type envelope struct {
-	Output any     `json:"output"`
-	Error  *string `json:"error"`
+	Output any       `json:"output"`
+	Error  *apiError `json:"error"`
+}
+
+type apiError struct {
+	Message string `json:"message"`
+	Code    any    `json:"code"`
 }
 
 type statusOutput struct {
@@ -22,10 +27,10 @@ type maskOutput struct {
 }
 
 type callRequest struct {
-	Text        string  `json:"text"`
-	Model       string  `json:"model"`
-	Temperature float32 `json:"temperature"`
-	APIKeyFile  string  `json:"apiKeyFile"`
+	Text        string   `json:"text"`
+	Model       string   `json:"model"`
+	Temperature *float32 `json:"temperature"`
+	APIKeyFile  string   `json:"apiKeyFile"`
 }
 
 type maskRequest struct {

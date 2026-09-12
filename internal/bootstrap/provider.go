@@ -95,8 +95,16 @@ func ProvideNERRecognizers(cfg Config) ([]*nerrepo.Recognizer, error) {
 			slog.Warn("NER 模型加载失败，该语言退化为纯正则", "model", m.id, "err", err)
 			continue
 		}
-		rec, err := nerrepo.LoadFromDir("ner:"+m.id, dir, sess,
-			nerrepo.WithLanguageFilter(m.forLang))
+		opts := []nerrepo.Option{nerrepo.WithLanguageFilter(m.forLang)}
+		if m.forLang(types.LangZhHans) {
+			converter, err := nerrepo.NewOpenCC()
+			if err != nil {
+				slog.Warn("OpenCC 不可用，简繁转换已禁用", "err", err)
+			} else {
+				opts = append(opts, nerrepo.WithConverter(converter))
+			}
+		}
+		rec, err := nerrepo.LoadFromDir("ner:"+m.id, dir, sess, opts...)
 		if err != nil {
 			slog.Warn("NER 模型初始化失败，该语言退化为纯正则", "model", m.id, "err", err)
 			_ = sess.Close()
@@ -109,7 +117,8 @@ func ProvideNERRecognizers(cfg Config) ([]*nerrepo.Recognizer, error) {
 }
 
 // ProvideMasker 把注入的依赖翻译成 masker 的函数选项。
-func ProvideMasker(rs []usecase.Recognizer, d usecase.LangDetector, c usecase.ConfigStore) *masker.Masker {
+func ProvideMasker(rs []usecase.Recognizer, d usecase.LangDetector, c usecase.ConfigStore, cfg Config) *masker.Masker {
+	c.SetMask(types.ApplyMaskConfig(c.Mask(), cfg.MaskConfig))
 	return masker.New(
 		masker.WithRecognizers(rs...),
 		masker.WithLangDetector(d),
@@ -146,5 +155,13 @@ func ProvideHTTPServer(app *App, p *proxy.Proxy, cfg Config) *httptransport.Serv
 	return httptransport.New(app.Masker, app.Restorer, app.Conf,
 		httptransport.WithProxy(p),
 		httptransport.WithAPIKey(cfg.HTTPAPIKey),
+		httptransport.WithTemperature(cfg.Temperature),
+		httptransport.WithProxyFactory(func(path string) (*proxy.Proxy, error) {
+			client, err := llmrepo.NewFromFile(path)
+			if err != nil {
+				return nil, err
+			}
+			return proxy.New(app.Masker, app.Restorer, client), nil
+		}),
 	)
 }

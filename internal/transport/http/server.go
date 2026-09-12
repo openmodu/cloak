@@ -19,17 +19,24 @@ import (
 
 // Server 持有用例对象与一份可选的访问口令。
 type Server struct {
-	masker   *masker.Masker
-	restorer *restorer.Restorer
-	proxy    *proxy.Proxy
-	conf     usecase.ConfigStore
-	apiKey   string
-	log      *slog.Logger
+	masker       *masker.Masker
+	restorer     *restorer.Restorer
+	proxy        *proxy.Proxy
+	conf         usecase.ConfigStore
+	apiKey       string
+	temperature  float32
+	proxyFactory func(string) (*proxy.Proxy, error)
+	log          *slog.Logger
 
 	srv *http.Server
 }
 
 type Option func(*Server)
+
+func WithTemperature(v float32) Option { return func(s *Server) { s.temperature = v } }
+func WithProxyFactory(f func(string) (*proxy.Proxy, error)) Option {
+	return func(s *Server) { s.proxyFactory = f }
+}
 
 // WithAPIKey 开启 Authorization 校验。留空则不校验。
 func WithAPIKey(key string) Option {
@@ -98,7 +105,9 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		got := strings.TrimSpace(r.Header.Get("Authorization"))
-		got = strings.TrimPrefix(got, "Bearer ")
+		if len(got) >= 7 && strings.EqualFold(got[:7], "Bearer ") {
+			got = got[7:]
+		}
 		if strings.TrimSpace(got) != s.apiKey {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -118,7 +127,7 @@ func writeOutput(w http.ResponseWriter, output any) {
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, envelope{Error: &msg})
+	writeJSON(w, status, envelope{Error: &apiError{Message: msg}})
 }
 
 // decode 解析请求体，失败时直接回 400。

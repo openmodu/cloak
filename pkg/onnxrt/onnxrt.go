@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	ort "github.com/yalue/onnxruntime_go"
@@ -71,6 +72,9 @@ func Open(modelPath string) (*Session, error) {
 	if d := outputInfo[0].Dimensions; len(d) > 0 && d[len(d)-1] > 0 {
 		numLabels = int(d[len(d)-1])
 	}
+	if numLabels <= 0 {
+		return nil, fmt.Errorf("onnxrt: model must declare a positive output label dimension")
+	}
 
 	sess, err := ort.NewDynamicAdvancedSession(modelPath, inputNames, []string{outputName}, nil)
 	if err != nil {
@@ -80,7 +84,10 @@ func Open(modelPath string) (*Session, error) {
 }
 
 // Infer 执行一次推理，返回 [seqLen][numLabels] 的 logits。
-func (s *Session) Infer(_ context.Context, inputIDs, attentionMask, tokenTypeIDs []int64) ([][]float32, error) {
+func (s *Session) Infer(ctx context.Context, inputIDs, attentionMask, tokenTypeIDs []int64) ([][]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	seqLen := len(inputIDs)
 	if seqLen == 0 {
 		return nil, nil
@@ -100,10 +107,9 @@ func (s *Session) Infer(_ context.Context, inputIDs, attentionMask, tokenTypeIDs
 		}
 	}()
 	for _, name := range s.inputs {
-		data, ok := byName[name]
+		data, ok := byName[strings.TrimSuffix(name, ":0")]
 		if !ok {
-			// 模型要一个我们不认识的输入，按全零补上，避免直接失败
-			data = make([]int64, seqLen)
+			return nil, fmt.Errorf("onnxrt: unsupported input %s", name)
 		}
 		t, err := ort.NewTensor(shape, data)
 		if err != nil {
@@ -119,6 +125,10 @@ func (s *Session) Infer(_ context.Context, inputIDs, attentionMask, tokenTypeIDs
 	defer out.Destroy()
 
 	s.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
 	err = s.sess.Run(values, []ort.Value{out})
 	s.mu.Unlock()
 	if err != nil {

@@ -21,16 +21,13 @@ type FileConfig struct {
 	MaskConfig  map[string]*bool `yaml:"mask_config"`
 }
 
-// LoadFile 读取配置文件，文件不存在时返回零值而不是错误——配置文件本就是可选的。
+// LoadFile 在未指定路径时使用默认配置；显式路径不存在时报错，避免误用默认脱敏开关。
 func LoadFile(path string) (FileConfig, error) {
 	var cfg FileConfig
 	if path == "" {
 		return cfg, nil
 	}
 	b, err := os.ReadFile(expandHome(path))
-	if os.IsNotExist(err) {
-		return cfg, nil
-	}
 	if err != nil {
 		return cfg, fmt.Errorf("read config %s: %w", path, err)
 	}

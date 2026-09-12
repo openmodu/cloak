@@ -31,14 +31,31 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if s.proxy == nil {
+	p := s.proxy
+	if req.APIKeyFile != "" {
+		if s.proxyFactory == nil {
+			writeError(w, http.StatusBadRequest, "request apiKeyFile is not supported")
+			return
+		}
+		var err error
+		p, err = s.proxyFactory(req.APIKeyFile)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if p == nil {
 		writeError(w, http.StatusServiceUnavailable, "LLM 未配置：启动时请用 --api-key-file 指定 API key 文件")
 		return
 	}
-	res, err := s.proxy.Call(r.Context(), proxy.Request{
+	temperature := s.temperature
+	if req.Temperature != nil {
+		temperature = *req.Temperature
+	}
+	res, err := p.Call(r.Context(), proxy.Request{
 		Text:        req.Text,
 		Model:       req.Model,
-		Temperature: req.Temperature,
+		Temperature: temperature,
 	})
 	if err != nil {
 		s.log.Error("call 失败", "err", err)
@@ -117,7 +134,7 @@ func (s *Server) maskOne(r *http.Request, req maskRequest) (maskOutput, error) {
 	if err != nil {
 		return maskOutput{}, err
 	}
-	encoded, err := meta.Encode()
+	encoded, err := meta.EncodeAIFW()
 	if err != nil {
 		return maskOutput{}, err
 	}

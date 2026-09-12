@@ -34,5 +34,7 @@ type Config struct {
 	// /api/call 会明确回 503，而脱敏/还原接口照常可用。
 	APIKeyFile string
 	// HTTPAPIKey 非空时启用 Authorization 校验。
-	HTTPAPIKey string
+	HTTPAPIKey  string
+	MaskConfig  map[string]*bool
+	Temperature float32
 }

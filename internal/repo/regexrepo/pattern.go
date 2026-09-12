@@ -34,7 +34,11 @@ type compiledPattern struct {
 }
 
 func compile(spec PatternSpec) (compiledPattern, error) {
-	expr, shift, err := translateWordBoundaries(spec.Pattern)
+	expr, err := unicodeClasses(spec.Pattern)
+	if err != nil {
+		return compiledPattern{}, err
+	}
+	expr, shift, err := translateWordBoundaries(expr)
 	if err != nil {
 		return compiledPattern{}, fmt.Errorf("pattern %s: %w", spec.Name, err)
 	}
