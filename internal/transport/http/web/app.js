@@ -16,6 +16,21 @@ function clearResult() {
   el('credential-details').open = false;
 }
 function count() { el('char-count').textContent = `${Array.from(el('source').value).length.toLocaleString()} characters`; }
+// Render untrusted output as text, never as HTML.
+function renderResult(text, highlight) {
+  const target = el('result-text');
+  target.replaceChildren();
+  if (!highlight) { target.textContent = text; return; }
+  let offset = 0;
+  for (const match of text.matchAll(/__PII_[A-Z_]+_\d+__/g)) {
+    target.append(document.createTextNode(text.slice(offset, match.index)));
+    const mark = document.createElement('mark');
+    mark.textContent = match[0];
+    target.append(mark);
+    offset = match.index + match[0].length;
+  }
+  target.append(document.createTextNode(text.slice(offset)));
+}
 function setMode(next, input = '') {
   if (busy) return;
   mode = next;
@@ -27,15 +42,20 @@ function setMode(next, input = '') {
   el('mask-mode').setAttribute('aria-pressed', String(masking));
   el('restore-mode').setAttribute('aria-pressed', String(!masking));
   el('current-mode').textContent = masking ? 'Mask text' : 'Restore text';
-  el('heading').replaceChildren();
-  el('heading').append(masking ? 'Share the idea.' : 'Bring the details back.', document.createElement('br'), masking ? 'Keep the details private.' : 'Right where they belong.');
-  el('intro-copy').textContent = masking ? 'Mask sensitive details before your next conversation. Bring them back when you’re ready.' : 'Paste a restoration record to recover the original details.';
-  el('input-label').textContent = masking ? 'What would you like to protect?' : 'Your restoration JSON';
-  el('source').placeholder = masking ? 'Paste an email, a note, or anything you’d rather keep private…' : 'Paste {"text": "…", "maskMeta": "…"} here';
+  el('heading').replaceChildren(
+    masking ? 'Share the idea.' : 'Bring the details back.',
+    document.createElement('br'),
+    masking ? 'Keep the details private.' : 'Right where they belong.',
+  );
+  el('intro-copy').textContent = masking
+    ? 'Mask what matters before the conversation. Bring it back when you are ready.'
+    : 'Paste the restoration record from a previous masking result.';
+  el('input-label').textContent = masking ? 'Text' : 'Restoration JSON';
+  el('source').placeholder = masking ? 'Paste anything you would rather not send as-is…' : 'Paste {"text": "…", "maskMeta": "…"} here';
   el('source').value = input;
   el('sample').hidden = !masking;
   el('language-label').hidden = !masking;
-  el('submit').textContent = masking ? 'Mask text ↑' : 'Restore text ↶';
+  el('submit').textContent = masking ? 'Mask text' : 'Restore text';
   count();
 }
 async function request(path, body) {
@@ -76,9 +96,9 @@ el('workspace-form').addEventListener('submit', async event => {
   try {
     const output = await request(mode === 'mask' ? '/api/mask_text' : '/api/restore_text', body);
     if (mode === 'mask' && typeof output.maskMeta !== 'string') throw new Error('The server did not return a restoration record.');
-    el('result-title').textContent = mode === 'mask' ? 'Your masked text' : 'Your restored text';
-    el('result-text').textContent = output.text;
-    el('result-note').textContent = mode === 'mask' ? 'Review the result before sharing.' : 'Original details restored. Keep this text private.';
+    el('result-title').textContent = mode === 'mask' ? 'Masked text' : 'Restored text';
+    renderResult(output.text, mode === 'mask');
+    el('result-note').textContent = mode === 'mask' ? 'Review before sharing.' : 'Restored. Keep this private.';
     el('credential-details').hidden = mode !== 'mask';
     el('use-restore').hidden = mode !== 'mask';
     if (mode === 'mask') {
@@ -86,7 +106,7 @@ el('workspace-form').addEventListener('submit', async event => {
       el('record-text').textContent = JSON.stringify(record, null, 2);
     }
     el('result').hidden = false;
-    message(mode === 'mask' && output.text === body.text ? 'No changes detected. This does not guarantee the text is free of sensitive information.' : 'Done. Your result is ready below.');
+    message(mode === 'mask' && output.text === body.text ? 'Nothing was masked. That does not mean the text is free of sensitive information.' : 'Done.');
   } catch (error) {
     message(error.name === 'AbortError' ? 'The request timed out. Please try again.' : error instanceof TypeError ? 'Could not reach the server. Check your connection and try again.' : error.message, true);
   } finally {
@@ -106,9 +126,9 @@ el('use-restore').addEventListener('click', () => { if (record) { setMode('resto
 el('mask-mode').addEventListener('click', () => { if (mode !== 'mask') setMode('mask'); });
 el('restore-mode').addEventListener('click', () => { if (mode !== 'restore') setMode('restore'); });
 el('new-session').addEventListener('click', () => { setMode('mask'); el('access-key').value = ''; el('language').value = 'auto'; el('source').focus(); });
-el('sample').addEventListener('click', () => { clearResult(); message('Example loaded. Choose Mask text to try it.'); el('source').value = 'Hi Alex,\n\nPlease send the project notes to alex.morgan@example.com. You can reach me at 18744325579 if anything comes up.\n\nThanks!'; count(); el('source').focus(); });
+el('sample').addEventListener('click', () => { clearResult(); message('Example loaded.'); el('source').value = 'Hi Alex,\n\nPlease send the project notes to alex.morgan@example.com. You can reach me at 18744325579 if anything comes up.\n\nThanks!'; count(); el('source').focus(); });
 el('source').addEventListener('input', () => { clearResult(); message(''); count(); });
 el('language').addEventListener('change', () => { clearResult(); message(''); });
 el('source').addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); el('workspace-form').requestSubmit(); } });
 // No localStorage, cookies, analytics, external fonts, or third-party requests.
-fetch('/api/health', { cache: 'no-store', credentials: 'omit' }).then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(data => { if (data.status !== 'ok') throw new Error(); el('connection').textContent = 'Service connected'; el('connection').className = 'connection online'; }).catch(() => { el('connection').textContent = 'Service unavailable'; el('connection').className = 'connection offline'; });
+fetch('/api/health', { cache: 'no-store', credentials: 'omit' }).then(response => { if (!response.ok) throw new Error(); return response.json(); }).then(data => { if (data.status !== 'ok') throw new Error(); el('connection').textContent = 'Connected'; el('connection').className = 'status online'; }).catch(() => { el('connection').textContent = 'Unavailable'; el('connection').className = 'status offline'; });

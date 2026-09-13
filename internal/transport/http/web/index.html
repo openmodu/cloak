@@ -4,43 +4,92 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Cloak — A little privacy, by default</title>
+  <title>cloak — a little privacy, by default</title>
   <link rel="stylesheet" href="/assets/app.css">
   <script src="/assets/app.js" defer></script>
 </head>
 <body>
-  <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Cloak home"><span class="brand-mark" aria-hidden="true">c.</span>cloak<span class="brand-dot">/</span></a>
-    <button id="new-session" class="new-session"><span aria-hidden="true">＋</span> New workspace</button>
-    <div class="nav-label">WORKSPACE</div>
-    <nav aria-label="Workspace">
-      <button id="mask-mode" class="nav-item selected" aria-pressed="true"><span aria-hidden="true">◈</span> Mask text</button>
-      <button id="restore-mode" class="nav-item" aria-pressed="false"><span aria-hidden="true">↶</span> Restore text</button>
+  <header class="topbar">
+    <span class="brand">cloak</span>
+
+    <nav class="tabs" aria-label="Mode">
+      <button id="mask-mode" class="tab selected" aria-pressed="true">Mask</button>
+      <button id="restore-mode" class="tab" aria-pressed="false">Restore</button>
     </nav>
-    <div class="sidebar-note"><span class="small-mark" aria-hidden="true">✳︎</span><p>A little privacy.<br>A lot more peace of mind.</p><span>YOUR TEXT, YOUR CONTROL</span></div>
-  </aside>
-  <div class="main-shell">
-    <header><span>Privacy workspace <span class="header-slash">/</span> <span id="current-mode">Mask text</span></span><span id="connection" class="connection">Checking service…</span></header>
-    <main>
-      <div class="intro"><div class="eyebrow"><span aria-hidden="true">✳︎</span> A THOUGHTFUL LAYER OF PRIVACY</div><h1 id="heading">Share the idea.<br>Keep the details private.</h1><p id="intro-copy">Mask sensitive details before your next conversation.<br>Bring them back when you’re ready.</p></div>
-      <div class="workspace">
-        <form id="workspace-form">
-          <div class="editor-top"><label id="input-label" for="source">What would you like to protect?</label><button type="button" id="sample" class="text-button">Try an example <span aria-hidden="true">↗</span></button></div>
-          <textarea id="source" required spellcheck="false" placeholder="Paste an email, a note, or anything you’d rather keep private…"></textarea>
-          <div class="editor-bottom"><label id="language-label" class="language">Language <select id="language"><option value="auto">Auto-detect</option><option value="en">English</option><option value="zh-Hans">Chinese (Simplified)</option><option value="zh-Hant">Chinese (Traditional)</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></label><span id="char-count">0 characters</span><button id="submit" class="primary" type="submit">Mask text <span aria-hidden="true">↑</span></button></div>
-        </form>
-        <div class="under-editor"><span>No LLM calls. Processed by this Cloak server.</span><span>⌘ / Ctrl + Enter</span></div>
-        <p id="message" role="status" aria-live="polite"></p>
-        <section id="result" class="result" hidden aria-labelledby="result-title">
-          <div class="result-top"><h2 id="result-title">Your masked text</h2><button id="copy-text" class="secondary">Copy text</button></div>
-          <pre id="result-text" tabindex="0"></pre>
-          <div class="result-bottom"><span id="result-note">Review the result before sharing.</span><button id="use-restore" class="text-button">Restore this text <span aria-hidden="true">↗</span></button></div>
-          <details id="credential-details"><summary>Restoration record</summary><p>This record contains sensitive information needed to restore your text. Keep it private. Copy it before leaving this page.</p><button id="copy-record" class="secondary">Copy restoration JSON</button><pre id="record-text" tabindex="0"></pre></details>
-        </section>
-        <details class="settings"><summary>Server access <span>Optional</span></summary><label for="access-key">Access token</label><input id="access-key" type="password" autocomplete="off" placeholder="Only needed if your server requires a token"><p>Sent only to this server. Not saved in browser storage.</p></details>
+
+    <div class="topbar-end">
+      <span id="connection" class="status">Checking…</span>
+      <button id="new-session" class="link">Reset</button>
+    </div>
+  </header>
+
+  <main>
+    <h1 id="heading">Share the idea.<br>Keep the details private.</h1>
+    <p id="intro-copy" class="lede">Mask what matters before the conversation. Bring it back when you are ready.</p>
+    <span id="current-mode" class="sr-only">Mask text</span>
+
+    <form id="workspace-form">
+      <div class="field-head">
+        <label id="input-label" for="source">Text</label>
+        <button type="button" id="sample" class="link">Use an example</button>
       </div>
-      <footer><span class="footer-mark" aria-hidden="true">◇</span> Detection depends on server configuration. Names and addresses may require NER models.<br>Always review masked text before sharing. Refreshing clears this workspace.</footer>
-    </main>
-  </div>
+
+      <textarea id="source" required spellcheck="false"
+        placeholder="Paste anything you would rather not send as-is…"></textarea>
+
+      <div class="field-foot">
+        <label id="language-label" class="select">
+          <span class="sr-only">Language</span>
+          <select id="language">
+            <option value="auto">Auto-detect</option>
+            <option value="en">English</option>
+            <option value="zh-Hans">Chinese (Simplified)</option>
+            <option value="zh-Hant">Chinese (Traditional)</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+          </select>
+        </label>
+        <span id="char-count" class="count">0 characters</span>
+        <button id="submit" class="primary" type="submit">Mask text</button>
+      </div>
+    </form>
+
+    <p class="hint">⌘ / Ctrl + Enter to run</p>
+    <p id="message" role="status" aria-live="polite"></p>
+
+    <section id="result" class="result" hidden aria-labelledby="result-title">
+      <div class="row">
+        <h2 id="result-title">Masked text</h2>
+        <button id="copy-text" class="button">Copy</button>
+      </div>
+
+      <pre id="result-text" tabindex="0"></pre>
+
+      <div class="row foot">
+        <span id="result-note">Review before sharing.</span>
+        <button id="use-restore" class="link">Restore this</button>
+      </div>
+
+      <details id="credential-details">
+        <summary>Restoration record</summary>
+        <p>Needed to restore the original text, and it contains that text. Keep it private — copy it before you leave this page.</p>
+        <button id="copy-record" class="button">Copy JSON</button>
+        <pre id="record-text" tabindex="0"></pre>
+      </details>
+    </section>
+
+    <details class="settings">
+      <summary>Access token <span class="note">optional</span></summary>
+      <label for="access-key">Token</label>
+      <input id="access-key" type="password" autocomplete="off"
+        placeholder="Only if this server requires one">
+      <p>Sent to this server only. Never stored.</p>
+    </details>
+
+    <footer>
+      Detection depends on server configuration; names and addresses need NER models.
+      Always review the result before sharing.
+    </footer>
+  </main>
 </body>
 </html>
