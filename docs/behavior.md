@@ -11,12 +11,12 @@
 | 路径类配置 | `models_dir`、`api_key_file` 开头的 `~` 会展开成用户主目录 |
 | 请求级 apiKeyFile | 默认关闭；配置 `--api-key-dir` 后才启用，且只接受该目录内的相对路径 |
 | 错误响应 | `{message, code}` 对象，配合 HTTP 4xx/5xx 状态码 |
-| 自动语言 | 省略、空字符串、`auto` 均触发自动检测；假名/谚文占字母与汉字至少 25% 才判日韩，再按汉字占比定中英，简繁靠繁体专用字；这是启发式，不等同于 aifw 的 langdetect，混合文本可显式指定语言 |
+| 自动语言 | 省略、空字符串、`auto` 均触发自动检测；假名/谚文占字母与汉字至少 25% 才判日韩，再按汉字占比定中英，简繁靠繁体专用字；这是启发式，不是统计语言识别模型，混合文本可显式指定语言 |
 | 凭据 | HTTP/CLI JSON 输出小端二进制 ABI，只序列化命中的文本片段；读取同时兼容旧的 base64(JSON) |
 | Unicode 正则 | 内置规则的数字、空白及词边界使用 Unicode 集合；自定义规则中的复杂嵌套/否定类不保证与其他正则引擎语义一致 |
 | NER 分词 | 共享转换器串行保护，有并发回归测试；`tokenizer.json` 声明的流水线超出实现范围时加载即失败 |
 | NER 序列长度 | 取模型 `config.json` 的 `max_position_embeddings`，读不到退回 512 |
-| 地址融合兜底 | 默认遵循 aifw，移除原始地址种子；显式设置 YAML `address_fallback: true` 才在融合失败时保留达到隐私阈值的 NER 原始地址 |
+| 地址融合兜底 | `address_fallback` 控制融合失败时是否保留达到隐私阈值的 NER 原始地址 |
 | 简繁转换 | 安装 OpenCC 后中文 NER 自动接入；繁体输入不转换，简体输入 s2t，token 批量 t2s |
 
 ## CLI
@@ -51,7 +51,7 @@ CLOAK_TEST_MODELS_DIR=/path/to/models \
 CLOAK_ONNXRUNTIME_LIB=/path/to/libonnxruntime.so make test-onnx
 ```
 
-运行时默认模型是 aifw 的 `funstory-ai/neurobert-mini`（英文）与
+运行时默认模型是 `funstory-ai/neurobert-mini`（英文）与
 `ckiplab/bert-tiny-chinese-ner`（中文），可用 `--en-model` /
 `--zh-model`、`CLOAK_EN_MODEL_ID` / `CLOAK_ZH_MODEL_ID` 或 YAML 覆盖。
 标签集须是 PER / ORG / LOC 这一套。

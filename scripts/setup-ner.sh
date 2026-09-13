@@ -15,7 +15,7 @@ HF_ENDPOINT="${HF_ENDPOINT:-https://huggingface.co}"
 ORT_VERSION="${ORT_VERSION:-1.30.0}"
 
 # These repositories provide ready-to-use ONNX exports. Runtime defaults remain
-# the original aifw model IDs; export the selected IDs below when launching.
+# the built-in model IDs; export the selected IDs below when launching.
 EN_MODEL="${CLOAK_EN_MODEL_ID:-Xenova/bert-base-NER}"
 ZH_MODEL="${CLOAK_ZH_MODEL_ID:-Xenova/bert-base-multilingual-cased-ner-hrl}"
 

@@ -137,7 +137,7 @@ func (s *Server) maskOne(r *http.Request, req maskRequest) (maskOutput, error) {
 	if err != nil {
 		return maskOutput{}, err
 	}
-	encoded, err := meta.EncodeAIFW()
+	encoded, err := meta.EncodeBinary()
 	if err != nil {
 		return maskOutput{}, err
 	}

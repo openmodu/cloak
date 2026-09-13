@@ -17,21 +17,21 @@ import (
 	"github.com/openmodu/cloak/internal/repo/confrepo"
 )
 
-const usage = `cloak — 发给大模型之前脱敏，拿回结果之后还原
+const usage = `cloak — Mask sensitive data before sending it to an LLM, then restore the response
 
-用法:
-  cloak mask      [-f 文件]         输出脱敏后的文本
-  cloak spans     [-f 文件]         以 JSON 输出识别到的敏感区间
-  cloak roundtrip [-f 文件]         脱敏后立即还原，校验与原文一致
-  cloak mask --json [-f 文件]       输出 text 与 maskMeta，供以后还原
-  cloak restore [-f JSON文件]       从 {text, maskMeta} 还原
-  cloak mask-batch [-f JSON文件]    输入 [{text, language}]，输出凭据数组
-  cloak restore-batch [-f JSON文件] 输入 [{text, maskMeta}]，输出原文数组
-  cloak call --api-key-file 文件    脱敏 → LLM → 还原
+Usage:
+  cloak mask          [-f FILE]       Output masked text
+  cloak spans         [-f FILE]       Output detected sensitive spans as JSON
+  cloak roundtrip     [-f FILE]       Mask, restore, and verify a lossless round trip
+  cloak mask --json   [-f FILE]       Output text and maskMeta for later restoration
+  cloak restore       [-f JSON_FILE]  Restore from {text, maskMeta}
+  cloak mask-batch    [-f JSON_FILE]  Mask [{text, language}] into restorable records
+  cloak restore-batch [-f JSON_FILE]  Restore [{text, maskMeta}] into original texts
+  cloak call --api-key-file FILE      Mask -> LLM -> restore
 
-可选参数：--config YAML文件、--models-dir 目录、--language 语言。
+Options: --config YAML_FILE, --models-dir DIR, --language LANGUAGE.
 
-不带 -f 时从标准输入读取。
+Reads from standard input when -f is omitted.
 `
 
 // Run 执行一次命令，返回进程退出码。
@@ -49,19 +49,19 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	switch cmd {
 	case "mask", "spans", "roundtrip", "restore", "mask-batch", "restore-batch", "call":
 	default:
-		fmt.Fprintf(stderr, "未知命令: %s\n%s", cmd, usage)
+		fmt.Fprintf(stderr, "Unknown command: %s\n%s", cmd, usage)
 		return 2
 	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	file := fs.String("f", "", "输入文件，缺省从标准输入读取")
-	configPath := fs.String("config", "", "YAML 配置")
-	modelsDir := fs.String("models-dir", "", "NER 模型目录")
-	language := fs.String("language", "", "语言，空或 auto 自动检测")
-	jsonOutput := fs.Bool("json", false, "输出可还原 JSON")
-	keyFile := fs.String("api-key-file", "", "LLM 配置")
-	model := fs.String("model", "", "模型")
-	temperature := fs.String("temperature", "", "温度")
+	file := fs.String("f", "", "Input file (defaults to standard input)")
+	configPath := fs.String("config", "", "YAML configuration file")
+	modelsDir := fs.String("models-dir", "", "NER model directory")
+	language := fs.String("language", "", "Language (empty or auto enables detection)")
+	jsonOutput := fs.Bool("json", false, "Output restorable JSON")
+	keyFile := fs.String("api-key-file", "", "LLM configuration file")
+	model := fs.String("model", "", "LLM model")
+	temperature := fs.String("temperature", "", "Sampling temperature")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -78,7 +78,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	text, err := readInput(*file, stdin)
 	if err != nil {
-		fmt.Fprintln(stderr, "读取输入失败:", err)
+		fmt.Fprintln(stderr, "Failed to read input:", err)
 		return 1
 	}
 
@@ -90,7 +90,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		AddressFallback: addressFallback(fileCfg.AddressFallback),
 	})
 	if err != nil {
-		fmt.Fprintln(stderr, "初始化失败:", err)
+		fmt.Fprintln(stderr, "Initialization failed:", err)
 		return 1
 	}
 
@@ -120,11 +120,11 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "mask":
 		masked, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
-			fmt.Fprintln(stderr, "脱敏失败:", err)
+			fmt.Fprintln(stderr, "Masking failed:", err)
 			return 1
 		}
 		if *jsonOutput {
-			encoded, err := meta.EncodeAIFW()
+			encoded, err := meta.EncodeBinary()
 			if err != nil {
 				fmt.Fprintln(stderr, err)
 				return 1
@@ -139,36 +139,36 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "spans":
 		_, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
-			fmt.Fprintln(stderr, "识别失败:", err)
+			fmt.Fprintln(stderr, "Detection failed:", err)
 			return 1
 		}
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(spansView(text, meta.Items)); err != nil {
-			fmt.Fprintln(stderr, "序列化失败:", err)
+			fmt.Fprintln(stderr, "Serialization failed:", err)
 			return 1
 		}
 	case "roundtrip":
 		masked, meta, err := app.Masker.MaskWithLanguage(ctx, text, types.Language(*language))
 		if err != nil {
-			fmt.Fprintln(stderr, "脱敏失败:", err)
+			fmt.Fprintln(stderr, "Masking failed:", err)
 			return 1
 		}
 		restored, err := app.Restorer.Restore(ctx, masked, meta)
 		if err != nil {
-			fmt.Fprintln(stderr, "还原失败:", err)
+			fmt.Fprintln(stderr, "Restoration failed:", err)
 			return 1
 		}
 		fmt.Fprintf(stdout, "--- masked ---\n%s\n--- restored ---\n%s\n", masked, restored)
 		if restored != text {
-			fmt.Fprintln(stderr, "还原结果与原文不一致")
+			fmt.Fprintln(stderr, "Restored text does not match the original")
 			return 1
 		}
-		fmt.Fprintf(stderr, "往返一致，共脱敏 %d 处\n", len(meta.Items))
+		fmt.Fprintf(stderr, "Round trip verified: %d spans masked\n", len(meta.Items))
 	case "-h", "--help", "help":
 		fmt.Fprint(stdout, usage)
 	default:
-		fmt.Fprintf(stderr, "未知命令: %s\n\n%s", cmd, usage)
+		fmt.Fprintf(stderr, "Unknown command: %s\n\n%s", cmd, usage)
 		return 2
 	}
 	return 0

@@ -63,6 +63,7 @@ func New(m *masker.Masker, r *restorer.Restorer, conf usecase.ConfigStore, opts 
 // Handler 装配路由。
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	registerWeb(mux)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/config", s.auth(s.handleConfig))
 	mux.HandleFunc("POST /api/call", s.auth(s.handleCall))

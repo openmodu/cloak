@@ -44,6 +44,38 @@ curl -s localhost:8844/api/health
 私钥、URL 这些有固定形状的能认出来，人名、机构名、中文完整地址认不出来。
 后者需要模型，见「启用 NER」。
 
+## Web workspace
+
+The HTTP server includes an English-language web workspace at `/`:
+
+```bash
+go build -o bin/cloakd ./cmd/cloakd
+./bin/cloakd --host 127.0.0.1 --port 8844
+# Open http://127.0.0.1:8844/
+```
+
+For local NER and address masking, install the models with
+`bash scripts/setup-ner.sh`, then run:
+
+```bash
+bash scripts/run-web.sh --port 18844
+# Open http://127.0.0.1:18844/
+```
+
+This builds an ONNX-enabled binary and loads `configs/cloak.yaml`, which enables
+address masking and address fallback. It uses the runtime in `~/.cloak/lib` by
+default; override `CLOAK_ONNXRUNTIME_LIB` for a different installation.
+
+Mask text, copy the result or restoration JSON, and restore the original text.
+The page uses the same server APIs; it does not call an LLM. No frontend build,
+CDN, external fonts, or browser storage is required. If HTTP authentication is
+enabled, enter the token under **Server access**. The static page is public;
+API authorization remains enforced. Use HTTPS when accessing a remote server.
+
+Restoration records contain sensitive original details. Keep them private and
+copy them before leaving the page; refreshing clears the workspace. Detection
+depends on server settings and loaded models, so always review the result.
+
 ## HTTP 接口
 
 | 方法 | 路径 | 说明 |
@@ -286,7 +318,7 @@ export CLOAK_ZH_MODEL_ID=Xenova/bert-base-multilingual-cased-ner-hrl
 ./bin/cloakd
 ```
 
-运行时默认模型与 aifw 一致：`funstory-ai/neurobert-mini`（英文）和
+运行时默认模型：`funstory-ai/neurobert-mini`（英文）和
 `ckiplab/bert-tiny-chinese-ner`（中文）。安装脚本选择有现成 ONNX 导出的 Xenova 模型，
 须使用脚本输出的模型 ID 环境变量（如上），这不代表两套模型结果相同。可以用 `--en-model` /
 `--zh-model`、`CLOAK_EN_MODEL_ID` / `CLOAK_ZH_MODEL_ID` 或配置文件换掉。

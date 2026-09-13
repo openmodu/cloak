@@ -35,7 +35,7 @@ func DecodeMaskMeta(s string) (*MaskMeta, error) {
 		return nil, fmt.Errorf("decode mask meta: 不是合法的 base64: %w", err)
 	}
 	if (len(raw) >= 8 && uint64(binary.LittleEndian.Uint32(raw)) == uint64(len(raw))) || !bytes.HasPrefix(bytes.TrimSpace(raw), []byte("{")) {
-		return decodeAIFW(raw)
+		return decodeBinary(raw)
 	}
 	var m MaskMeta
 	if err := json.Unmarshal(raw, &m); err != nil {

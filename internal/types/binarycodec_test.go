@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestAIFWBinaryFixture(t *testing.T) {
+func TestBinaryBinaryFixture(t *testing.T) {
 	// u32 total=35, text=3, "abc", alignment, id=1, type=email,
 	// start=0, end=3, score=1.0, 3 trailing allocation bytes.
 	raw, err := hex.DecodeString("230000000300000061626300010000000200000000000000030000000000803f000000")
@@ -21,7 +21,7 @@ func TestAIFWBinaryFixture(t *testing.T) {
 	if text, ok := m.Lookup(1); !ok || text != "abc" {
 		t.Fatalf("%+v", m)
 	}
-	got, err := m.EncodeAIFW()
+	got, err := m.EncodeBinary()
 	if err != nil || got != encoded {
 		t.Fatalf("encoded=%s err=%v", got, err)
 	}
@@ -38,9 +38,9 @@ func TestAIFWBinaryFixture(t *testing.T) {
 	}
 }
 
-func TestAIFWOnlySerializesMatchedText(t *testing.T) {
+func TestBinaryOnlySerializesMatchedText(t *testing.T) {
 	m := &MaskMeta{Original: "prefix secret suffix", Items: []MaskedItem{{ID: 1, Type: EntityPassword, Start: 7, End: 13, Score: 1}}}
-	encoded, err := m.EncodeAIFW()
+	encoded, err := m.EncodeBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestAIFWOnlySerializesMatchedText(t *testing.T) {
 	if decoded.Original != "secret" {
 		t.Fatalf("unexpected retained text %q", decoded.Original)
 	}
-	empty, err := (&MaskMeta{}).EncodeAIFW()
+	empty, err := (&MaskMeta{}).EncodeBinary()
 	if err != nil {
 		t.Fatal(err)
 	}

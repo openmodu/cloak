@@ -131,7 +131,7 @@ func TestAddressKeptWhenMergeYieldsNothing(t *testing.T) {
 
 	start := strings.Index(text, seed)
 	if got := mergeChineseAddress(text, []types.Span{{Type: types.EntityPhysicalAddress, Start: start, End: start + len(seed), Score: 0.99}}); len(got) != 0 {
-		t.Fatalf("aifw default must discard unmerged seed: %+v", got)
+		t.Fatalf("strict policy must discard unmerged seed: %+v", got)
 	}
 	m := New(
 		WithAddressFallback(true),

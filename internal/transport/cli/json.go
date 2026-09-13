@@ -38,7 +38,7 @@ func runJSON(ctx context.Context, app *bootstrap.App, cmd, input, language strin
 			if err != nil {
 				return fmt.Errorf("item %d: %w", i, err)
 			}
-			encoded, err := meta.EncodeAIFW()
+			encoded, err := meta.EncodeBinary()
 			if err != nil {
 				return err
 			}

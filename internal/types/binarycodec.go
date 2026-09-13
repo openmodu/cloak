@@ -7,9 +7,9 @@ import (
 	"math"
 )
 
-// EncodeAIFW uses the little-endian Zig MatchedPIISpan ABI (20-byte records).
+// EncodeBinary uses the little-endian matched-span binary format (20-byte records).
 // Only matched slices are serialized, rather than the entire input document.
-func (m *MaskMeta) EncodeAIFW() (string, error) {
+func (m *MaskMeta) EncodeBinary() (string, error) {
 	if m == nil {
 		m = &MaskMeta{}
 	}
@@ -43,8 +43,8 @@ func (m *MaskMeta) EncodeAIFW() (string, error) {
 	return base64.StdEncoding.EncodeToString(raw), nil
 }
 
-func decodeAIFW(raw []byte) (*MaskMeta, error) {
-	invalid := func() (*MaskMeta, error) { return nil, fmt.Errorf("invalid AIFW mask metadata") }
+func decodeBinary(raw []byte) (*MaskMeta, error) {
+	invalid := func() (*MaskMeta, error) { return nil, fmt.Errorf("invalid binary mask metadata") }
 	if len(raw) < 8 || uint64(binary.LittleEndian.Uint32(raw)) != uint64(len(raw)) {
 		return invalid()
 	}
