@@ -405,6 +405,15 @@ footer {
 
 /* ---------- 窄屏 ---------- */
 
+.llm-settings { margin: 0 0 22px; padding: 17px 20px; background: var(--raised); border-radius: 12px; }
+.llm-settings label { display: block; font-size: 14px; margin-bottom: 8px; }
+.llm-settings input { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.llm-settings p { font-size: 13px; color: var(--ink-soft); margin: 12px 0 0; }
+.trace article + article { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 20px; }
+.trace .hint { margin-left: 0; }
+.timing { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+#total-timing { margin: 0 0 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+
 @media (max-width: 620px) {
   .topbar { padding: 14px 18px; gap: 12px; flex-wrap: wrap; }
   .brand { font-size: 22px; }

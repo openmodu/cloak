@@ -48,7 +48,7 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if p == nil {
-		writeError(w, http.StatusServiceUnavailable, "LLM 未配置：启动时请用 --api-key-file 指定 API key 文件")
+		writeError(w, http.StatusServiceUnavailable, "LLM is not configured. Start the server with --api-key-file.")
 		return
 	}
 	temperature := s.temperature
@@ -56,6 +56,7 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 		temperature = *req.Temperature
 	}
 	res, err := p.Call(r.Context(), proxy.Request{
+		Language:    types.Language(req.Language),
 		Text:        req.Text,
 		Model:       req.Model,
 		Temperature: temperature,
@@ -63,6 +64,12 @@ func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("call 失败", "err", err)
 		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	s.log.Info("LLM pipeline completed", "mask_ms", res.Timings.MaskMS, "llm_ms", res.Timings.LLMMS, "restore_ms", res.Timings.RestoreMS, "total_ms", res.Timings.TotalMS)
+	if req.Trace {
+		writeOutput(w, callTraceOutput{Text: res.Text, MaskedText: res.Masked, LLMReply: res.LLMReply, Timings: res.Timings})
 		return
 	}
 	writeOutput(w, textOutput{Text: res.Text})

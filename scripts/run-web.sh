@@ -8,4 +8,8 @@ if [[ ! -f "$CLOAK_ONNXRUNTIME_LIB" ]]; then
   exit 1
 fi
 CGO_ENABLED=1 go build -tags cloak_onnx -o bin/cloakd-onnx ./cmd/cloakd
-exec ./bin/cloakd-onnx --config configs/cloak.yaml --host 127.0.0.1 "$@"
+llm_args=()
+if [[ -f configs/llm.local.json ]]; then
+  llm_args=(--api-key-file configs/llm.local.json)
+fi
+exec ./bin/cloakd-onnx --config configs/cloak.yaml --host 127.0.0.1 "${llm_args[@]}" "$@"

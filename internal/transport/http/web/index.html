@@ -15,6 +15,7 @@
     <nav class="tabs" aria-label="Mode">
       <button id="mask-mode" class="tab selected" aria-pressed="true">Mask</button>
       <button id="restore-mode" class="tab" aria-pressed="false">Restore</button>
+      <button id="llm-mode" class="tab" aria-pressed="false">LLM test</button>
     </nav>
 
     <div class="topbar-end">
@@ -27,6 +28,12 @@
     <h1 id="heading">Share the idea.<br>Keep the details private.</h1>
     <p id="intro-copy" class="lede">Mask what matters before the conversation. Bring it back when you are ready.</p>
     <span id="current-mode" class="sr-only">Mask text</span>
+
+    <section id="llm-settings" class="llm-settings" hidden aria-label="LLM connection">
+      <label for="llm-model">Model <span class="note">optional override</span></label>
+      <input id="llm-model" type="text" placeholder="Server default (qwen/qwen3.8-27b)" autocomplete="off">
+      <p>Uses the LLM configured on this server. Running sends the masked prompt to that model, not the restoration record. Detection can miss details; try a fictional example first.</p>
+    </section>
 
     <form id="workspace-form">
       <div class="field-head">
@@ -57,9 +64,16 @@
     <p class="hint">⌘ / Ctrl + Enter to run</p>
     <p id="message" role="status" aria-live="polite"></p>
 
+    <section id="llm-trace" class="result trace" hidden aria-label="LLM test stages">
+      <p id="total-timing" class="timing"></p>
+      <article><div class="row"><h2>1. Sent to the model</h2><span id="mask-timing" class="timing"></span></div><p class="hint">The exact prompt after masking.</p><pre id="masked-prompt" tabindex="0"></pre></article>
+      <article><div class="row"><h2>2. Model reply</h2><span id="llm-timing" class="timing"></span></div><p class="hint">The raw reply, before restoration. Timing includes the network request and model generation.</p><pre id="llm-reply" tabindex="0"></pre></article>
+    </section>
+
     <section id="result" class="result" hidden aria-labelledby="result-title">
       <div class="row">
         <h2 id="result-title">Masked text</h2>
+        <span id="restore-timing" class="timing" hidden></span>
         <button id="copy-text" class="button">Copy</button>
       </div>
 

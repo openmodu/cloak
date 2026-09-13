@@ -1,4 +1,5 @@
 bin/
+configs/llm.local.json
 *.test
 *.out
 

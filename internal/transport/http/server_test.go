@@ -171,6 +171,63 @@ func TestCallWithoutLLM(t *testing.T) {
 
 type stubLLM struct{ reply string }
 
+type traceEchoLLM struct{ prompt string }
+
+func (c *traceEchoLLM) Chat(_ context.Context, req types.ChatRequest) (types.ChatReply, error) {
+	c.prompt = req.Prompt
+	return types.ChatReply{Text: req.Prompt}, nil
+}
+
+func TestCallTraceUsesActualMaskedPrompt(t *testing.T) {
+	client := &traceEchoLLM{}
+	s, _ := newTestServer(t, WithAPIKey("test-key"))
+	s.proxy = proxy.New(s.masker, s.restorer, client)
+	h := s.Handler()
+	for _, trace := range []bool{false, true} {
+		body, err := json.Marshal(map[string]any{"text": "Contact demo@example.com", "language": "en", "trace": trace})
+		if err != nil {
+			t.Fatal(err)
+		}
+		code, response := do(t, h, "POST", "/api/call", string(body), map[string]string{"Authorization": "Bearer test-key"})
+		if code != 200 {
+			t.Fatalf("%d %v", code, response)
+		}
+		out := response["output"].(map[string]any)
+		if out["text"] != "Contact demo@example.com" {
+			t.Fatalf("not restored: %v", out)
+		}
+		if strings.Contains(client.prompt, "demo@example.com") || !strings.Contains(client.prompt, "__PII_EMAIL_ADDRESS_") {
+			t.Fatalf("unexpected upstream prompt: %s", client.prompt)
+		}
+		if trace {
+			timings := out["timings"].(map[string]any)
+			var sum float64
+			for _, key := range []string{"maskMs", "llmMs", "restoreMs"} {
+				value, ok := timings[key].(float64)
+				if !ok || value < 0 {
+					t.Fatalf("invalid timing %s: %v", key, timings)
+				}
+				sum += value
+			}
+			if timings["totalMs"].(float64)+0.000001 < sum {
+				t.Fatalf("total below stage sum: %v", timings)
+			}
+			if out["maskedText"] != client.prompt || out["llmReply"] != client.prompt {
+				t.Fatalf("trace not actual upstream values: %v", out)
+			}
+		} else if len(out) != 1 {
+			t.Fatalf("default response changed: %v", out)
+		}
+		if _, ok := out["maskMeta"]; ok {
+			t.Fatal("trace must not expose restoration metadata")
+		}
+	}
+	code, _ := do(t, h, "POST", "/api/call", `{"text":"secret","trace":true}`, nil)
+	if code != 401 {
+		t.Fatalf("trace bypassed auth: %d", code)
+	}
+}
+
 func (s stubLLM) Chat(context.Context, types.ChatRequest) (types.ChatReply, error) {
 	return types.ChatReply{Text: s.reply}, nil
 }

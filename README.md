@@ -67,7 +67,15 @@ address masking and address fallback. It uses the runtime in `~/.cloak/lib` by
 default; override `CLOAK_ONNXRUNTIME_LIB` for a different installation.
 
 Mask text, copy the result or restoration JSON, and restore the original text.
-The page uses the same server APIs; it does not call an LLM. No frontend build,
+The **LLM test** tab runs mask → LLM → restore using the server-configured model.
+It shows the actual masked prompt, raw model reply, and restored response. Only
+clicking **Run LLM test** sends a prompt to the model; Mask and Restore do not.
+Each stage shows server-measured elapsed time. The LLM duration includes upstream
+network I/O; the total excludes browser transfer time. Successful calls also log
+`mask_ms`, `llm_ms`, `restore_ms`, and `total_ms`, without prompt or response text.
+Use a fictional example first: detection can miss sensitive details. Model names
+can be overridden, but upstream URLs and credentials remain server-controlled.
+The page uses the same server APIs. No frontend build,
 CDN, external fonts, or browser storage is required. If HTTP authentication is
 enabled, enter the token under **Server access**. The static page is public;
 API authorization remains enforced. Use HTTPS when accessing a remote server.
